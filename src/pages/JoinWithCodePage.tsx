@@ -106,6 +106,24 @@ export default function JoinWithCodePage() {
     );
   }
 
+  // Check if lobby is closed or not in lobby status
+  if (!hasJoined && session.status !== 'lobby') {
+    return (
+      <PageLayout title="Sala cerrada">
+        <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
+          <div className="text-6xl">🚫</div>
+          <p className="text-xl text-center">Esta sala ya no acepta jugadores</p>
+          <p className="text-muted-foreground text-center">
+            La partida ya ha comenzado o la sala está cerrada
+          </p>
+          <Button onClick={() => navigate('/join')} variant="outline">
+            Volver
+          </Button>
+        </div>
+      </PageLayout>
+    );
+  }
+
   if (hasJoined) {
     return (
       <PageLayout title={`Sala: ${code}`}>

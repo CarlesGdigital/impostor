@@ -1,5 +1,5 @@
 export type GameMode = 'single' | 'multi';
-export type GameStatus = 'lobby' | 'dealing' | 'ready' | 'finished';
+export type GameStatus = 'lobby' | 'dealing' | 'ready' | 'finished' | 'closed';
 export type PlayerRole = 'crew' | 'topo';
 export type Gender = 'male' | 'female' | 'other';
 
