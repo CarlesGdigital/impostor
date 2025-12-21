@@ -14,13 +14,179 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      game_sessions: {
+        Row: {
+          clue_text: string | null
+          created_at: string
+          host_guest_id: string | null
+          host_user_id: string | null
+          id: string
+          join_code: string | null
+          mode: string
+          pack_id: string | null
+          status: string
+          topo_count: number
+          word_id: string | null
+          word_text: string | null
+        }
+        Insert: {
+          clue_text?: string | null
+          created_at?: string
+          host_guest_id?: string | null
+          host_user_id?: string | null
+          id?: string
+          join_code?: string | null
+          mode: string
+          pack_id?: string | null
+          status?: string
+          topo_count?: number
+          word_id?: string | null
+          word_text?: string | null
+        }
+        Update: {
+          clue_text?: string | null
+          created_at?: string
+          host_guest_id?: string | null
+          host_user_id?: string | null
+          id?: string
+          join_code?: string | null
+          mode?: string
+          pack_id?: string | null
+          status?: string
+          topo_count?: number
+          word_id?: string | null
+          word_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_sessions_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "words"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_sessions_word_id_fkey"
+            columns: ["word_id"]
+            isOneToOne: false
+            referencedRelation: "words"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_key: string | null
+          created_at: string
+          display_name: string | null
+          gender: string | null
+          id: string
+          photo_url: string | null
+        }
+        Insert: {
+          avatar_key?: string | null
+          created_at?: string
+          display_name?: string | null
+          gender?: string | null
+          id: string
+          photo_url?: string | null
+        }
+        Update: {
+          avatar_key?: string | null
+          created_at?: string
+          display_name?: string | null
+          gender?: string | null
+          id?: string
+          photo_url?: string | null
+        }
+        Relationships: []
+      }
+      session_players: {
+        Row: {
+          avatar_key: string | null
+          created_at: string
+          display_name: string
+          gender: string | null
+          guest_id: string | null
+          has_revealed: boolean | null
+          id: string
+          photo_url: string | null
+          role: string | null
+          session_id: string
+          turn_order: number | null
+          user_id: string | null
+        }
+        Insert: {
+          avatar_key?: string | null
+          created_at?: string
+          display_name: string
+          gender?: string | null
+          guest_id?: string | null
+          has_revealed?: boolean | null
+          id?: string
+          photo_url?: string | null
+          role?: string | null
+          session_id: string
+          turn_order?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          avatar_key?: string | null
+          created_at?: string
+          display_name?: string
+          gender?: string | null
+          guest_id?: string | null
+          has_revealed?: boolean | null
+          id?: string
+          photo_url?: string | null
+          role?: string | null
+          session_id?: string
+          turn_order?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_players_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "game_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      words: {
+        Row: {
+          clue: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          pack: string
+          word: string
+        }
+        Insert: {
+          clue: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          pack?: string
+          word: string
+        }
+        Update: {
+          clue?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          pack?: string
+          word?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_join_code: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
