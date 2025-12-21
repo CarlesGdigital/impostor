@@ -24,20 +24,18 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          <div className="dark">
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/auth" element={<AuthPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/new-game" element={<NewGamePage />} />
-              <Route path="/join" element={<JoinGamePage />} />
-              <Route path="/join/:code" element={<JoinWithCodePage />} />
-              <Route path="/lobby/:sessionId" element={<LobbyPage />} />
-              <Route path="/game/:sessionId" element={<GamePage />} />
-              <Route path="/play/:sessionId/:playerId" element={<PlayPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </div>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/new-game" element={<NewGamePage />} />
+            <Route path="/join" element={<JoinGamePage />} />
+            <Route path="/join/:code" element={<JoinWithCodePage />} />
+            <Route path="/lobby/:sessionId" element={<LobbyPage />} />
+            <Route path="/game/:sessionId" element={<GamePage />} />
+            <Route path="/play/:sessionId/:playerId" element={<PlayPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
         </BrowserRouter>
       </TooltipProvider>
     </AuthProvider>
