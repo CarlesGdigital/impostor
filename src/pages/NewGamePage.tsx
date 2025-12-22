@@ -1,17 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { AddPlayerForm } from '@/components/game/AddPlayerForm';
 import { PlayerAvatar } from '@/components/game/PlayerAvatar';
+import { PackSelector } from '@/components/game/PackSelector';
 import { useAuth } from '@/hooks/useAuth';
 import { useGuestId } from '@/hooks/useGuestId';
 import { useGameSession } from '@/hooks/useGameSession';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { Plus, X, Users, Smartphone } from 'lucide-react';
+import { Plus, X, Users, Smartphone, AlertTriangle } from 'lucide-react';
 import type { GameMode, GuestPlayer } from '@/types/game';
 
 export default function NewGamePage() {
@@ -22,6 +23,7 @@ export default function NewGamePage() {
   const [players, setPlayers] = useState<GuestPlayer[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [selectedPackIds, setSelectedPackIds] = useState<string[]>([]);
   
   const { user } = useAuth();
   const guestId = useGuestId();
@@ -29,8 +31,19 @@ export default function NewGamePage() {
   const navigate = useNavigate();
 
   const minPlayers = 3;
-  const maxPlayers = 12;
-  const maxTopos = Math.max(1, Math.floor((mode === 'single' ? players.length : 6) / 3));
+  const maxPlayers = 20;
+  const maxTopos = 5;
+  
+  // Calculate actual max topos based on player count (at least half must be crew)
+  const playerCount = mode === 'single' ? players.length : 6; // Assume 6 for multi mode
+  const effectiveMaxTopos = Math.min(maxTopos, Math.max(1, Math.floor(playerCount / 2)));
+  
+  // Adjust topo count if it exceeds the new max
+  useEffect(() => {
+    if (topoCount > effectiveMaxTopos) {
+      setTopoCount(effectiveMaxTopos);
+    }
+  }, [effectiveMaxTopos, topoCount]);
 
   const handleAddPlayer = (player: GuestPlayer) => {
     if (players.length >= maxPlayers) {
@@ -46,6 +59,12 @@ export default function NewGamePage() {
   };
 
   const handleCreateGame = async () => {
+    // Validate categories
+    if (selectedPackIds.length === 0) {
+      toast.error('Selecciona al menos una categoría');
+      return;
+    }
+
     // In single mode, require minimum players
     if (mode === 'single' && players.length < minPlayers) {
       toast.error(`Mínimo ${minPlayers} jugadores`);
@@ -59,7 +78,8 @@ export default function NewGamePage() {
         mode,
         topoCount,
         user?.id,
-        !user ? guestId : undefined
+        !user ? guestId : undefined,
+        selectedPackIds
       );
 
       if (!session) {
@@ -92,7 +112,8 @@ export default function NewGamePage() {
     }
   };
 
-  const canCreate = mode === 'multi' || players.length >= minPlayers;
+  const canCreate = (mode === 'multi' || players.length >= minPlayers) && selectedPackIds.length > 0;
+  const topoWarning = mode === 'single' && players.length > 0 && topoCount > Math.floor(players.length / 2);
 
   return (
     <PageLayout 
@@ -140,6 +161,12 @@ export default function NewGamePage() {
           )}
         </div>
 
+        {/* Pack selector */}
+        <PackSelector 
+          selectedPackIds={selectedPackIds} 
+          onSelectionChange={setSelectedPackIds} 
+        />
+
         {/* Topo count */}
         <div className="space-y-3">
           <Label className="text-lg font-bold">Número de topos</Label>
@@ -161,11 +188,14 @@ export default function NewGamePage() {
             </button>
           </div>
           <p className="text-sm text-muted-foreground">
-            {mode === 'single' 
-              ? `Máximo ${maxTopos} topos para ${players.length || 3}+ jugadores`
-              : 'Podrás ajustarlo cuando se unan los jugadores'
-            }
+            Máximo {maxTopos} topos (la mitad de jugadores deben ser tripulación)
           </p>
+          {topoWarning && (
+            <div className="flex items-center gap-2 text-sm text-amber-600">
+              <AlertTriangle className="w-4 h-4" />
+              Demasiados topos para {players.length} jugadores
+            </div>
+          )}
         </div>
 
         {/* Players - Only for single mode */}

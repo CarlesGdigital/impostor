@@ -71,8 +71,10 @@ export type Database = {
           host_user_id: string | null
           id: string
           join_code: string | null
+          max_players: number | null
           mode: string
           pack_id: string | null
+          selected_pack_ids: string[] | null
           status: string
           topo_count: number
           word_id: string | null
@@ -86,8 +88,10 @@ export type Database = {
           host_user_id?: string | null
           id?: string
           join_code?: string | null
+          max_players?: number | null
           mode: string
           pack_id?: string | null
+          selected_pack_ids?: string[] | null
           status?: string
           topo_count?: number
           word_id?: string | null
@@ -101,8 +105,10 @@ export type Database = {
           host_user_id?: string | null
           id?: string
           join_code?: string | null
+          max_players?: number | null
           mode?: string
           pack_id?: string | null
+          selected_pack_ids?: string[] | null
           status?: string
           topo_count?: number
           word_id?: string | null
@@ -164,6 +170,7 @@ export type Database = {
           gender: string | null
           id: string
           photo_url: string | null
+          preferred_pack_ids: string[] | null
         }
         Insert: {
           avatar_key?: string | null
@@ -172,6 +179,7 @@ export type Database = {
           gender?: string | null
           id: string
           photo_url?: string | null
+          preferred_pack_ids?: string[] | null
         }
         Update: {
           avatar_key?: string | null
@@ -180,6 +188,7 @@ export type Database = {
           gender?: string | null
           id?: string
           photo_url?: string | null
+          preferred_pack_ids?: string[] | null
         }
         Relationships: []
       }

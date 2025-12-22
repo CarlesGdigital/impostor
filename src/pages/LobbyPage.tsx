@@ -4,13 +4,12 @@ import { Button } from '@/components/ui/button';
 import { PlayerList } from '@/components/game/PlayerList';
 import { useGameSession } from '@/hooks/useGameSession';
 import { toast } from 'sonner';
-import { Copy, Share2, Users, Lock } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { Copy, Share2, Users, Lock, AlertTriangle } from 'lucide-react';
 
 export default function LobbyPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
-  const { session, players, loading, startDealing, updateSessionStatus } = useGameSession({ sessionId });
+  const { session, players, loading, error, startDealing, updateSessionStatus } = useGameSession({ sessionId });
 
   const handleCopyCode = () => {
     if (session?.joinCode) {
@@ -32,7 +31,6 @@ export default function LobbyPage() {
           url,
         });
       } catch (err) {
-        // User cancelled or error
         navigator.clipboard.writeText(url);
         toast.success('Enlace copiado');
       }
@@ -52,8 +50,21 @@ export default function LobbyPage() {
       toast.error('Mínimo 3 jugadores');
       return;
     }
+    
+    // Validate topo count
+    const maxAllowedTopos = Math.floor(players.length / 2);
+    if (session && session.topoCount > maxAllowedTopos) {
+      toast.error(`Máximo ${maxAllowedTopos} topos para ${players.length} jugadores`);
+      return;
+    }
+
     await startDealing();
-    // Host stays on this page or navigates to a host view
+    
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    
     navigate(`/game/${sessionId}`);
   };
 
@@ -79,6 +90,9 @@ export default function LobbyPage() {
   }
 
   const isClosed = session.status === 'closed';
+  const maxPlayers = session.maxPlayers || 20;
+  const maxAllowedTopos = Math.floor(players.length / 2);
+  const topoWarning = session.topoCount > maxAllowedTopos && players.length >= 3;
 
   return (
     <PageLayout 
@@ -93,7 +107,7 @@ export default function LobbyPage() {
           )}
           <Button 
             onClick={handleStart} 
-            disabled={players.length < 3} 
+            disabled={players.length < 3 || topoWarning} 
             className="w-full h-16 text-xl font-bold"
           >
             Iniciar reparto ({players.length}/3 mín.)
@@ -135,12 +149,30 @@ export default function LobbyPage() {
           </div>
         )}
 
+        {/* Game config info */}
+        <div className="p-4 border-2 border-border bg-card space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Topos:</span>
+            <span className="font-bold">{session.topoCount}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Categorías:</span>
+            <span className="font-bold">{session.selectedPackIds?.length || 'Todas'}</span>
+          </div>
+          {topoWarning && (
+            <div className="flex items-center gap-2 text-sm text-amber-600 pt-2 border-t border-border">
+              <AlertTriangle className="w-4 h-4" />
+              Demasiados topos para {players.length} jugadores (máx. {maxAllowedTopos})
+            </div>
+          )}
+        </div>
+
         {/* Players */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-lg font-bold flex items-center gap-2">
               <Users className="w-5 h-5" />
-              Jugadores ({players.length})
+              Jugadores ({players.length}/{maxPlayers})
             </p>
             {players.length < 3 && (
               <span className="text-sm text-muted-foreground">

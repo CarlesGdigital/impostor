@@ -21,10 +21,12 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     joinCode: data.join_code,
     status: data.status,
     topoCount: data.topo_count,
+    maxPlayers: data.max_players,
     packId: data.pack_id,
-    wordId: data.word_id,
+    cardId: data.card_id,
     wordText: data.word_text,
     clueText: data.clue_text,
+    selectedPackIds: data.selected_pack_ids,
     createdAt: data.created_at,
   });
 
@@ -137,7 +139,8 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     mode: GameMode,
     topoCount: number,
     hostUserId?: string,
-    hostGuestId?: string
+    hostGuestId?: string,
+    selectedPackIds?: string[]
   ): Promise<GameSession | null> => {
     const joinCodeValue = mode === 'multi' ? generateJoinCode() : null;
 
@@ -150,6 +153,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         host_user_id: hostUserId || null,
         host_guest_id: hostGuestId || null,
         status: 'lobby',
+        selected_pack_ids: selectedPackIds || null,
       })
       .select()
       .single();
@@ -173,17 +177,19 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       .eq('id', session.id);
   };
 
-  const startDealing = async (packId?: string) => {
+  const startDealing = async () => {
     if (!session) return;
 
-    // Get random card from cards table (or fallback to words for backwards compatibility)
+    // Get random card from cards table using session's selected packs
     let randomCard: { id: string; word: string; clue: string } | null = null;
 
-    // Try cards table first
+    // Build query with selected packs filter
     let cardsQuery = supabase.from('cards').select('id, word, clue').eq('is_active', true);
-    if (packId) {
-      cardsQuery = cardsQuery.eq('pack_id', packId);
+    
+    if (session.selectedPackIds && session.selectedPackIds.length > 0) {
+      cardsQuery = cardsQuery.in('pack_id', session.selectedPackIds);
     }
+    
     const { data: cardsData } = await cardsQuery;
 
     if (cardsData && cardsData.length > 0) {
@@ -201,7 +207,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     }
 
     if (!randomCard) {
-      setError('No hay palabras disponibles');
+      setError('No hay palabras disponibles en las categorías seleccionadas');
       return;
     }
 
