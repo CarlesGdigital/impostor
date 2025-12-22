@@ -25,10 +25,12 @@ export interface GameSession {
   joinCode?: string;
   status: GameStatus;
   topoCount: number;
+  maxPlayers?: number;
   packId?: string;
-  wordId?: string;
+  cardId?: string;
   wordText?: string;
   clueText?: string;
+  selectedPackIds?: string[];
   createdAt: string;
 }
 
