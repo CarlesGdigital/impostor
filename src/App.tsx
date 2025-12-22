@@ -13,6 +13,9 @@ import JoinWithCodePage from "./pages/JoinWithCodePage";
 import LobbyPage from "./pages/LobbyPage";
 import GamePage from "./pages/GamePage";
 import PlayPage from "./pages/PlayPage";
+import AdminPage from "./pages/AdminPage";
+import AdminWordsPage from "./pages/AdminWordsPage";
+import AdminPacksPage from "./pages/AdminPacksPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +37,9 @@ const App = () => (
             <Route path="/lobby/:sessionId" element={<LobbyPage />} />
             <Route path="/game/:sessionId" element={<GamePage />} />
             <Route path="/play/:sessionId/:playerId" element={<PlayPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin/words" element={<AdminWordsPage />} />
+            <Route path="/admin/packs" element={<AdminPacksPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
