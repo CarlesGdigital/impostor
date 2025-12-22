@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { cn } from '@/lib/utils';
-import { Users, Smartphone, UserCircle, LogIn } from 'lucide-react';
+import { Users, Smartphone, UserCircle, LogIn, Settings } from 'lucide-react';
 import type { GameMode } from '@/types/game';
 
 const Index = () => {
   const [selectedMode, setSelectedMode] = useState<GameMode>('single');
   const { user } = useAuth();
+  const { isAdmin } = useUserRole();
   const navigate = useNavigate();
 
   return (
@@ -89,16 +91,28 @@ const Index = () => {
         </div>
 
         {/* Profile/Auth */}
-        <div className="w-full pt-4 border-t-2 border-border">
+        <div className="w-full pt-4 border-t-2 border-border space-y-1">
           {user ? (
-            <Button
-              onClick={() => navigate('/profile')}
-              variant="ghost"
-              className="w-full h-14 text-lg justify-start gap-3"
-            >
-              <UserCircle className="w-6 h-6" />
-              Mi perfil
-            </Button>
+            <>
+              <Button
+                onClick={() => navigate('/profile')}
+                variant="ghost"
+                className="w-full h-14 text-lg justify-start gap-3"
+              >
+                <UserCircle className="w-6 h-6" />
+                Mi perfil
+              </Button>
+              {isAdmin && (
+                <Button
+                  onClick={() => navigate('/admin')}
+                  variant="ghost"
+                  className="w-full h-14 text-lg justify-start gap-3"
+                >
+                  <Settings className="w-6 h-6" />
+                  Administración
+                </Button>
+              )}
+            </>
           ) : (
             <Button
               onClick={() => navigate('/auth')}

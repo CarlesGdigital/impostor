@@ -173,20 +173,34 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       .eq('id', session.id);
   };
 
-  const startDealing = async () => {
+  const startDealing = async (packId?: string) => {
     if (!session) return;
 
-    // Get random word
-    const { data: wordData } = await supabase
-      .from('words')
-      .select('*')
-      .eq('is_active', true)
-      .limit(1)
-      .order('created_at', { ascending: false });
+    // Get random card from cards table (or fallback to words for backwards compatibility)
+    let randomCard: { id: string; word: string; clue: string } | null = null;
 
-    const randomWord = wordData?.[Math.floor(Math.random() * (wordData?.length || 1))];
+    // Try cards table first
+    let cardsQuery = supabase.from('cards').select('id, word, clue').eq('is_active', true);
+    if (packId) {
+      cardsQuery = cardsQuery.eq('pack_id', packId);
+    }
+    const { data: cardsData } = await cardsQuery;
 
-    if (!randomWord) {
+    if (cardsData && cardsData.length > 0) {
+      randomCard = cardsData[Math.floor(Math.random() * cardsData.length)];
+    } else {
+      // Fallback to old words table
+      const { data: wordData } = await supabase
+        .from('words')
+        .select('id, word, clue')
+        .eq('is_active', true);
+
+      if (wordData && wordData.length > 0) {
+        randomCard = wordData[Math.floor(Math.random() * wordData.length)];
+      }
+    }
+
+    if (!randomCard) {
       setError('No hay palabras disponibles');
       return;
     }
@@ -212,9 +226,9 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       .from('game_sessions')
       .update({
         status: 'dealing',
-        word_id: randomWord.id,
-        word_text: randomWord.word,
-        clue_text: randomWord.clue,
+        card_id: randomCard.id,
+        word_text: randomCard.word,
+        clue_text: randomCard.clue,
       })
       .eq('id', session.id);
   };

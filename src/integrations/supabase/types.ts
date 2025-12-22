@@ -14,8 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      cards: {
+        Row: {
+          clue: string
+          created_at: string
+          created_by: string
+          difficulty: number | null
+          id: string
+          is_active: boolean
+          pack_id: string
+          word: string
+        }
+        Insert: {
+          clue: string
+          created_at?: string
+          created_by: string
+          difficulty?: number | null
+          id?: string
+          is_active?: boolean
+          pack_id: string
+          word: string
+        }
+        Update: {
+          clue?: string
+          created_at?: string
+          created_by?: string
+          difficulty?: number | null
+          id?: string
+          is_active?: boolean
+          pack_id?: string
+          word?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cards_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cards_pack_id_fkey"
+            columns: ["pack_id"]
+            isOneToOne: false
+            referencedRelation: "packs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_sessions: {
         Row: {
+          card_id: string | null
           clue_text: string | null
           created_at: string
           host_guest_id: string | null
@@ -30,6 +79,7 @@ export type Database = {
           word_text: string | null
         }
         Insert: {
+          card_id?: string | null
           clue_text?: string | null
           created_at?: string
           host_guest_id?: string | null
@@ -44,6 +94,7 @@ export type Database = {
           word_text?: string | null
         }
         Update: {
+          card_id?: string | null
           clue_text?: string | null
           created_at?: string
           host_guest_id?: string | null
@@ -59,6 +110,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "game_sessions_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "game_sessions_pack_id_fkey"
             columns: ["pack_id"]
             isOneToOne: false
@@ -73,6 +131,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      packs: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          slug: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          slug: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          slug?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -154,6 +236,27 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       words: {
         Row: {
           clue: string
@@ -187,9 +290,16 @@ export type Database = {
     }
     Functions: {
       generate_join_code: { Args: never; Returns: string }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -316,6 +426,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
