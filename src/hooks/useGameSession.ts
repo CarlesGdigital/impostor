@@ -177,8 +177,8 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       .eq('id', session.id);
   };
 
-  const startDealing = async () => {
-    if (!session) return;
+  const startDealing = async (): Promise<boolean> => {
+    if (!session) return false;
 
     // Get random card from cards table using session's selected packs
     let randomCard: { id: string; word: string; clue: string } | null = null;
@@ -208,7 +208,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
 
     if (!randomCard) {
       setError('No hay palabras disponibles en las categorías seleccionadas');
-      return;
+      return false;
     }
 
     // Assign roles
@@ -241,7 +241,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     if (updateError) {
       console.error('Error updating game session:', updateError);
       setError('Error al iniciar el reparto');
-      return;
+      return false;
     }
 
     // Update local session state immediately
@@ -253,6 +253,8 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       wordText: updatedCard.word,
       clueText: updatedCard.clue,
     } : null);
+
+    return true;
   };
 
   const markPlayerRevealed = async (playerId: string) => {

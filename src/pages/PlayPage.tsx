@@ -12,12 +12,12 @@ export default function PlayPage() {
     return <PageLayout title="Juego"><p className="text-center py-8">Cargando...</p></PageLayout>;
   }
 
-  const word = player.role === 'topo' ? session.clueText! : session.wordText!;
+  const word = player.role === 'topo' ? (session.clueText || 'Sin pista') : (session.wordText || 'Sin palabra');
 
   return (
     <PageLayout title="Tu carta" showBack={false}>
       <div className="max-w-md mx-auto">
-        <CardReveal word={word} isRevealed={player.hasRevealed} onRevealComplete={() => markPlayerRevealed(player.id)} />
+        <CardReveal word={word} isRevealed={player.hasRevealed} onRevealComplete={() => markPlayerRevealed(player.id)} revealDuration={1000} />
       </div>
     </PageLayout>
   );

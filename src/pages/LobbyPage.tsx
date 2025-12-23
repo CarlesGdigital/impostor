@@ -58,10 +58,10 @@ export default function LobbyPage() {
       return;
     }
 
-    await startDealing();
+    const success = await startDealing();
     
-    if (error) {
-      toast.error(error);
+    if (!success) {
+      toast.error(error || 'Error al iniciar el reparto');
       return;
     }
     
