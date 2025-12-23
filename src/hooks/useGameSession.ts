@@ -245,12 +245,13 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     }
 
     // Update local session state immediately
+    const updatedCard = randomCard;
     setSession(prev => prev ? {
       ...prev,
       status: 'dealing' as GameStatus,
-      cardId: randomCard.id,
-      wordText: randomCard.word,
-      clueText: randomCard.clue,
+      cardId: updatedCard.id,
+      wordText: updatedCard.word,
+      clueText: updatedCard.clue,
     } : null);
   };
 
