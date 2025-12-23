@@ -76,11 +76,22 @@ export default function GamePage() {
     );
   }
 
-  const word = currentPlayer.role === 'topo' ? (session.clueText || 'Sin pista') : (session.wordText || 'Sin palabra');
+  const isTopo = currentPlayer.role === 'topo';
+  
+  console.debug('[GamePage] Rol del jugador:', currentPlayer.role, '| Es topo:', isTopo);
+  console.debug('[GamePage] session.wordText:', session.wordText, '| session.clueText:', session.clueText);
+
   return (
     <PageLayout title={currentPlayer.displayName} showBack={false}>
       <div className="max-w-md mx-auto space-y-6">
-        <CardReveal word={word} isRevealed={false} onRevealComplete={handleRevealComplete} revealDuration={1000} />
+        <CardReveal 
+          word={session.wordText || ''} 
+          clue={session.clueText || ''} 
+          isTopo={isTopo} 
+          isRevealed={false} 
+          onRevealComplete={handleRevealComplete} 
+          revealDuration={1000} 
+        />
         <Button onClick={handleNext} variant="outline" className="w-full h-14 text-lg font-bold border-2">
           {isLastPlayer ? 'Terminar reparto' : 'Siguiente jugador'}
         </Button>
