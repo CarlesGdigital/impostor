@@ -3,6 +3,8 @@ import { cn } from '@/lib/utils';
 
 interface CardRevealProps {
   word: string;
+  clue: string;
+  isTopo: boolean;
   isRevealed: boolean;
   onRevealComplete?: () => void;
   revealDuration?: number;
@@ -11,6 +13,8 @@ interface CardRevealProps {
 
 export function CardReveal({ 
   word, 
+  clue,
+  isTopo,
   isRevealed: initialRevealed,
   onRevealComplete,
   revealDuration = 1000,
@@ -65,9 +69,19 @@ export function CardReveal({
         'flex flex-col items-center justify-center p-8 border-4 border-foreground bg-card min-h-[300px]',
         className
       )}>
-        <span className="text-5xl font-bold text-center break-words">
-          {word}
-        </span>
+        {isTopo ? (
+          <>
+            <span className="text-6xl font-bold text-destructive mb-4">🕵️ TOPO</span>
+            <span className="text-lg text-muted-foreground">Pista:</span>
+            <span className="text-3xl font-bold text-center break-words mt-2">
+              {clue || 'Sin pista'}
+            </span>
+          </>
+        ) : (
+          <span className="text-5xl font-bold text-center break-words">
+            {word || 'Sin palabra'}
+          </span>
+        )}
         <span className="mt-4 text-muted-foreground">Carta revelada</span>
       </div>
     );

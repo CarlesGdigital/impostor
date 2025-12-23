@@ -180,34 +180,55 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
   const startDealing = async (): Promise<boolean> => {
     if (!session) return false;
 
+    const selectedPacks = session.selectedPackIds || [];
+    console.debug('[startDealing] Categorías seleccionadas:', selectedPacks);
+
     // Get random card from cards table using session's selected packs
     let randomCard: { id: string; word: string; clue: string } | null = null;
 
     // Build query with selected packs filter
-    let cardsQuery = supabase.from('cards').select('id, word, clue').eq('is_active', true);
+    let cardsQuery = supabase.from('cards').select('id, word, clue, pack_id').eq('is_active', true);
     
-    if (session.selectedPackIds && session.selectedPackIds.length > 0) {
-      cardsQuery = cardsQuery.in('pack_id', session.selectedPackIds);
+    if (selectedPacks.length > 0) {
+      cardsQuery = cardsQuery.in('pack_id', selectedPacks);
     }
     
-    const { data: cardsData } = await cardsQuery;
+    const { data: cardsData, error: cardsError } = await cardsQuery;
+
+    console.debug('[startDealing] Cartas encontradas:', cardsData?.length || 0, cardsError ? `Error: ${cardsError.message}` : '');
 
     if (cardsData && cardsData.length > 0) {
-      randomCard = cardsData[Math.floor(Math.random() * cardsData.length)];
+      const randomIndex = Math.floor(Math.random() * cardsData.length);
+      randomCard = cardsData[randomIndex];
+      console.debug('[startDealing] Carta elegida:', randomCard);
     } else {
       // Fallback to old words table
-      const { data: wordData } = await supabase
+      console.debug('[startDealing] Sin cartas en tabla cards, buscando en words...');
+      const { data: wordData, error: wordError } = await supabase
         .from('words')
         .select('id, word, clue')
         .eq('is_active', true);
 
+      console.debug('[startDealing] Palabras encontradas en words:', wordData?.length || 0, wordError ? `Error: ${wordError.message}` : '');
+
       if (wordData && wordData.length > 0) {
         randomCard = wordData[Math.floor(Math.random() * wordData.length)];
+        console.debug('[startDealing] Palabra elegida de words:', randomCard);
       }
     }
 
     if (!randomCard) {
-      setError('No hay palabras disponibles en las categorías seleccionadas');
+      const errorMsg = 'No hay palabras activas en las categorías seleccionadas';
+      console.error('[startDealing]', errorMsg);
+      setError(errorMsg);
+      return false;
+    }
+
+    // Validate card has word and clue
+    if (!randomCard.word || !randomCard.clue) {
+      const errorMsg = 'La carta seleccionada no tiene palabra o pista válida';
+      console.error('[startDealing]', errorMsg, randomCard);
+      setError(errorMsg);
       return false;
     }
 
