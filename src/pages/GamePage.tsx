@@ -76,11 +76,11 @@ export default function GamePage() {
     );
   }
 
-  const word = currentPlayer.role === 'topo' ? session.clueText! : session.wordText!;
+  const word = currentPlayer.role === 'topo' ? (session.clueText || 'Sin pista') : (session.wordText || 'Sin palabra');
   return (
     <PageLayout title={currentPlayer.displayName} showBack={false}>
       <div className="max-w-md mx-auto space-y-6">
-        <CardReveal word={word} isRevealed={false} onRevealComplete={handleRevealComplete} />
+        <CardReveal word={word} isRevealed={false} onRevealComplete={handleRevealComplete} revealDuration={1000} />
         <Button onClick={handleNext} variant="outline" className="w-full h-14 text-lg font-bold border-2">
           {isLastPlayer ? 'Terminar reparto' : 'Siguiente jugador'}
         </Button>

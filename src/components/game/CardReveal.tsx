@@ -13,7 +13,7 @@ export function CardReveal({
   word, 
   isRevealed: initialRevealed,
   onRevealComplete,
-  revealDuration = 4000,
+  revealDuration = 1000,
   className 
 }: CardRevealProps) {
   const [isPressed, setIsPressed] = useState(false);
