@@ -227,8 +227,8 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         .eq('id', player.id);
     }
 
-    // Update session
-    await supabase
+    // Update session with word and clue
+    const { error: updateError } = await supabase
       .from('game_sessions')
       .update({
         status: 'dealing',
@@ -237,6 +237,21 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         clue_text: randomCard.clue,
       })
       .eq('id', session.id);
+
+    if (updateError) {
+      console.error('Error updating game session:', updateError);
+      setError('Error al iniciar el reparto');
+      return;
+    }
+
+    // Update local session state immediately
+    setSession(prev => prev ? {
+      ...prev,
+      status: 'dealing' as GameStatus,
+      cardId: randomCard.id,
+      wordText: randomCard.word,
+      clueText: randomCard.clue,
+    } : null);
   };
 
   const markPlayerRevealed = async (playerId: string) => {
