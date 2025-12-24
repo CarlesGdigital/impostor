@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { cn } from '@/lib/utils';
+import { useState, useRef, useEffect, useCallback } from "react";
+import { cn } from "@/lib/utils";
 
 interface CardRevealProps {
   word: string;
@@ -11,14 +11,14 @@ interface CardRevealProps {
   className?: string;
 }
 
-export function CardReveal({ 
-  word, 
+export function CardReveal({
+  word,
   clue,
   isTopo,
   isRevealed: initialRevealed,
   onRevealComplete,
   revealDuration = 1000,
-  className 
+  className,
 }: CardRevealProps) {
   const [isPressed, setIsPressed] = useState(false);
   const [hasRevealed, setHasRevealed] = useState(initialRevealed);
@@ -29,12 +29,12 @@ export function CardReveal({
   const startReveal = useCallback(() => {
     setIsPressed(true);
     startTimeRef.current = Date.now();
-    
+
     const updateProgress = () => {
       const elapsed = Date.now() - startTimeRef.current;
       const newProgress = Math.min((elapsed / revealDuration) * 100, 100);
       setProgress(newProgress);
-      
+
       if (elapsed >= revealDuration) {
         setHasRevealed(true);
         onRevealComplete?.();
@@ -42,7 +42,7 @@ export function CardReveal({
         timerRef.current = setTimeout(updateProgress, 50);
       }
     };
-    
+
     timerRef.current = setTimeout(updateProgress, 50);
   }, [revealDuration, onRevealComplete]);
 
@@ -65,22 +65,20 @@ export function CardReveal({
 
   if (hasRevealed) {
     return (
-      <div className={cn(
-        'flex flex-col items-center justify-center p-8 border-4 border-foreground bg-card min-h-[300px]',
-        className
-      )}>
+      <div
+        className={cn(
+          "flex flex-col items-center justify-center p-8 border-4 border-foreground bg-card min-h-[300px]",
+          className,
+        )}
+      >
         {isTopo ? (
           <>
             <span className="text-6xl font-bold text-destructive mb-4">🕵️ TOPO</span>
             <span className="text-lg text-muted-foreground">Pista:</span>
-            <span className="text-3xl font-bold text-center break-words mt-2">
-              {clue || 'Sin pista'}
-            </span>
+            <span className="text-3xl font-bold text-center break-words mt-2">{clue || "Sin pista"}</span>
           </>
         ) : (
-          <span className="text-5xl font-bold text-center break-words">
-            {word || 'Sin palabra'}
-          </span>
+          <span className="text-5xl font-bold text-center break-words">{word || "Cargando"}</span>
         )}
         <span className="mt-4 text-muted-foreground">Carta revelada</span>
       </div>
@@ -88,7 +86,7 @@ export function CardReveal({
   }
 
   return (
-    <div className={cn('flex flex-col items-center gap-6', className)}>
+    <div className={cn("flex flex-col items-center gap-6", className)}>
       <button
         onMouseDown={startReveal}
         onMouseUp={stopReveal}
@@ -96,29 +94,26 @@ export function CardReveal({
         onTouchStart={startReveal}
         onTouchEnd={stopReveal}
         className={cn(
-          'relative flex flex-col items-center justify-center p-8 border-4 border-foreground min-h-[300px] w-full',
-          'transition-all select-none touch-none',
-          isPressed ? 'bg-secondary scale-95' : 'bg-card hover:bg-secondary/50'
+          "relative flex flex-col items-center justify-center p-8 border-4 border-foreground min-h-[300px] w-full",
+          "transition-all select-none touch-none",
+          isPressed ? "bg-secondary scale-95" : "bg-card hover:bg-secondary/50",
         )}
       >
         <div className="absolute inset-0 flex items-center justify-center">
           <span className="text-8xl opacity-20">🔒</span>
         </div>
-        
+
         <span className="relative z-10 text-2xl font-bold text-center">
-          {isPressed ? 'Mantenga pulsado...' : 'Mantenga pulsado para revelar'}
+          {isPressed ? "Mantenga pulsado..." : "Mantenga pulsado para revelar"}
         </span>
-        
+
         {isPressed && (
           <div className="relative z-10 w-full max-w-xs mt-6 h-4 border-2 border-foreground bg-background">
-            <div 
-              className="h-full bg-foreground transition-all duration-100"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="h-full bg-foreground transition-all duration-100" style={{ width: `${progress}%` }} />
           </div>
         )}
       </button>
-      
+
       <p className="text-sm text-muted-foreground text-center">
         Mantén pulsado durante {revealDuration / 1000} segundos para ver tu carta
       </p>
