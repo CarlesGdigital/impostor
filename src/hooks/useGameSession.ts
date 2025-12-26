@@ -50,7 +50,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
 
     try {
       let query = supabase.from('game_sessions').select('*');
-      
+
       if (sessionId) {
         query = query.eq('id', sessionId);
       } else if (joinCode) {
@@ -154,6 +154,8 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         host_guest_id: hostGuestId || null,
         status: 'lobby',
         selected_pack_ids: selectedPackIds || null,
+        status: 'lobby',
+        selected_pack_ids: selectedPackIds || null,
       })
       .select()
       .single();
@@ -180,102 +182,114 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
   const startDealing = async (): Promise<boolean> => {
     if (!session) return false;
 
-    const selectedPacks = session.selectedPackIds || [];
-    console.debug('[startDealing] Categorías seleccionadas:', selectedPacks);
+    setLoading(true);
+    setError(null);
 
-    // Get random card from cards table using session's selected packs
-    let randomCard: { id: string; word: string; clue: string } | null = null;
+    try {
+      const selectedPacks = session.selectedPackIds || [];
+      console.debug('[startDealing] Iniciando asignación. Categorías:', selectedPacks);
 
-    // Build query with selected packs filter
-    let cardsQuery = supabase.from('cards').select('id, word, clue, pack_id').eq('is_active', true);
-    
-    if (selectedPacks.length > 0) {
-      cardsQuery = cardsQuery.in('pack_id', selectedPacks);
-    }
-    
-    const { data: cardsData, error: cardsError } = await cardsQuery;
+      // Get random card from cards table using session's selected packs
+      let randomCard: { id: string; word: string; clue: string } | null = null;
 
-    console.debug('[startDealing] Cartas encontradas:', cardsData?.length || 0, cardsError ? `Error: ${cardsError.message}` : '');
+      // Build query with selected packs filter
+      let cardsQuery = supabase.from('cards').select('id, word, clue, pack_id').eq('is_active', true);
 
-    if (cardsData && cardsData.length > 0) {
-      const randomIndex = Math.floor(Math.random() * cardsData.length);
-      randomCard = cardsData[randomIndex];
-      console.debug('[startDealing] Carta elegida:', randomCard);
-    } else {
-      // Fallback to old words table
-      console.debug('[startDealing] Sin cartas en tabla cards, buscando en words...');
-      const { data: wordData, error: wordError } = await supabase
-        .from('words')
-        .select('id, word, clue')
-        .eq('is_active', true);
-
-      console.debug('[startDealing] Palabras encontradas en words:', wordData?.length || 0, wordError ? `Error: ${wordError.message}` : '');
-
-      if (wordData && wordData.length > 0) {
-        randomCard = wordData[Math.floor(Math.random() * wordData.length)];
-        console.debug('[startDealing] Palabra elegida de words:', randomCard);
+      if (selectedPacks.length > 0) {
+        cardsQuery = cardsQuery.in('pack_id', selectedPacks);
       }
-    }
 
-    if (!randomCard) {
-      const errorMsg = 'No hay palabras activas en las categorías seleccionadas';
-      console.error('[startDealing]', errorMsg);
-      setError(errorMsg);
+      const { data: cardsData, error: cardsError } = await cardsQuery;
+
+      console.debug('[startDealing] Cartas encontradas:', cardsData?.length || 0, cardsError ? `Error: ${cardsError.message}` : '');
+
+      if (cardsData && cardsData.length > 0) {
+        const randomIndex = Math.floor(Math.random() * cardsData.length);
+        randomCard = cardsData[randomIndex];
+        console.debug('[startDealing] Carta elegida:', randomCard);
+      } else {
+        // Fallback to old words table
+        console.debug('[startDealing] Sin cartas en tabla cards, buscando en words...');
+        const { data: wordData, error: wordError } = await supabase
+          .from('words')
+          .select('id, word, clue')
+          .eq('is_active', true);
+
+        console.debug('[startDealing] Palabras encontradas en words:', wordData?.length || 0, wordError ? `Error: ${wordError.message}` : '');
+
+        if (wordData && wordData.length > 0) {
+          randomCard = wordData[Math.floor(Math.random() * wordData.length)];
+          console.debug('[startDealing] Palabra elegida de words:', randomCard);
+        }
+      }
+
+      if (!randomCard) {
+        const errorMsg = 'No hay palabras activas en las categorías seleccionadas';
+        console.error('[startDealing]', errorMsg);
+        setError(errorMsg);
+        return false;
+      }
+
+      // Validate card has word and clue
+      if (!randomCard.word || !randomCard.clue) {
+        const errorMsg = 'La carta seleccionada no tiene palabra o pista válida';
+        console.error('[startDealing]', errorMsg, randomCard);
+        setError(errorMsg);
+        return false;
+      }
+
+      // Assign roles
+      const playerIds = players.map(p => p.id);
+      const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
+      const topoIds = shuffled.slice(0, session.topoCount);
+
+      // Update players with roles and turn order
+      for (let i = 0; i < players.length; i++) {
+        const player = players[i];
+        const role = topoIds.includes(player.id) ? 'topo' : 'crew';
+
+        await supabase
+          .from('session_players')
+          .update({ role, turn_order: i, has_revealed: false })
+          .eq('id', player.id);
+      }
+
+      // Update session with word and clue
+      const { error: updateError } = await supabase
+        .from('game_sessions')
+        .update({
+          status: 'dealing',
+          card_id: randomCard.id,
+          word_text: randomCard.word,
+          clue_text: randomCard.clue,
+        })
+        .eq('id', session.id);
+
+      if (updateError) {
+        console.error('Error updating game session:', updateError);
+        setError('Error al actualizar la sesión con la carta');
+        return false;
+      }
+
+      // Update local session state immediately
+      const updatedCard = randomCard;
+      setSession(prev => prev ? {
+        ...prev,
+        status: 'dealing' as GameStatus,
+        cardId: updatedCard.id,
+        wordText: updatedCard.word,
+        clueText: updatedCard.clue,
+      } : null);
+
+      return true;
+
+    } catch (e: any) {
+      console.error('[startDealing] Excepción inesperada:', e);
+      setError(e.message || 'Error inesperado al asignar carta');
       return false;
+    } finally {
+      setLoading(false);
     }
-
-    // Validate card has word and clue
-    if (!randomCard.word || !randomCard.clue) {
-      const errorMsg = 'La carta seleccionada no tiene palabra o pista válida';
-      console.error('[startDealing]', errorMsg, randomCard);
-      setError(errorMsg);
-      return false;
-    }
-
-    // Assign roles
-    const playerIds = players.map(p => p.id);
-    const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
-    const topoIds = shuffled.slice(0, session.topoCount);
-
-    // Update players with roles and turn order
-    for (let i = 0; i < players.length; i++) {
-      const player = players[i];
-      const role = topoIds.includes(player.id) ? 'topo' : 'crew';
-      
-      await supabase
-        .from('session_players')
-        .update({ role, turn_order: i, has_revealed: false })
-        .eq('id', player.id);
-    }
-
-    // Update session with word and clue
-    const { error: updateError } = await supabase
-      .from('game_sessions')
-      .update({
-        status: 'dealing',
-        card_id: randomCard.id,
-        word_text: randomCard.word,
-        clue_text: randomCard.clue,
-      })
-      .eq('id', session.id);
-
-    if (updateError) {
-      console.error('Error updating game session:', updateError);
-      setError('Error al iniciar el reparto');
-      return false;
-    }
-
-    // Update local session state immediately
-    const updatedCard = randomCard;
-    setSession(prev => prev ? {
-      ...prev,
-      status: 'dealing' as GameStatus,
-      cardId: updatedCard.id,
-      wordText: updatedCard.word,
-      clueText: updatedCard.clue,
-    } : null);
-
-    return true;
   };
 
   const markPlayerRevealed = async (playerId: string) => {

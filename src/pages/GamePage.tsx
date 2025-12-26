@@ -17,7 +17,9 @@ export default function GamePage() {
     players,
     markPlayerRevealed,
     finishDealing,
-    startDealing, // <-- si no existe en su hook, comente esta línea y el useEffect de más abajo
+    startDealing,
+    loading,
+    error,
   } = useGameSession({ sessionId } as any);
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -121,14 +123,35 @@ export default function GamePage() {
           <h2 className="text-3xl font-bold text-center">Pase el móvil a</h2>
           <p className="text-5xl font-bold">{currentPlayer.displayName}</p>
 
+
           {!canReveal && (
-            <p className="text-sm text-muted-foreground text-center">
-              Preparando carta… (si se queda aquí, la sesión no ha asignado palabra/pista)
-            </p>
+            <div className="space-y-4 text-center">
+              {error ? (
+                <div className="bg-destructive/10 text-destructive p-4 rounded-lg">
+                  <p className="font-bold">Error:</p>
+                  <p>{error}</p>
+                  <Button
+                    onClick={() => startDealing && startDealing()}
+                    variant="destructive"
+                    className="mt-4"
+                  >
+                    Reintentar asignación
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  {loading ? "Asignando carta..." : "Preparando carta… (esperando servidor)"}
+                </p>
+              )}
+            </div>
           )}
 
-          <Button onClick={() => setPhase("reveal")} className="w-full h-16 text-xl font-bold" disabled={!canReveal}>
-            Estoy listo
+          <Button
+            onClick={() => setPhase("reveal")}
+            className="w-full h-16 text-xl font-bold"
+            disabled={!canReveal || loading}
+          >
+            {loading ? "Un momento..." : "Estoy listo"}
           </Button>
         </div>
       </PageLayout>
