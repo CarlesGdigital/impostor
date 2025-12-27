@@ -19,11 +19,11 @@ const AdminWordsPage = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
-  
+
   const [cards, setCards] = useState<Card[]>([]);
   const [packs, setPacks] = useState<Pack[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // Form state
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -34,7 +34,7 @@ const AdminWordsPage = () => {
   const [formDifficulty, setFormDifficulty] = useState('');
   const [formActive, setFormActive] = useState(true);
   const [saving, setSaving] = useState(false);
-  
+
   // Import state
   const [csvContent, setCsvContent] = useState('');
   const [importing, setImporting] = useState(false);
@@ -58,13 +58,13 @@ const AdminWordsPage = () => {
 
   const fetchData = async () => {
     setLoading(true);
-    
+
     // Fetch packs
     const { data: packsData } = await supabase
       .from('packs')
       .select('*')
       .order('name');
-    
+
     setPacks((packsData || []).map(p => ({
       id: p.id,
       name: p.name,
@@ -268,6 +268,15 @@ const AdminWordsPage = () => {
     });
   };
 
+  const toggleCardActive = async (card: Card) => {
+    await supabase
+      .from('cards')
+      .update({ is_active: !card.isActive })
+      .eq('id', card.id);
+
+    fetchData();
+  };
+
   if (authLoading || roleLoading || loading) {
     return (
       <PageLayout title="Palabras">
@@ -436,11 +445,10 @@ animales, León, Rey de la selva, 1, true"
                     <TableCell className="font-bold">{card.word}</TableCell>
                     <TableCell className="text-muted-foreground">{card.clue}</TableCell>
                     <TableCell>
-                      {card.isActive ? (
-                        <CheckCircle className="w-4 h-4 text-green-600" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-muted-foreground" />
-                      )}
+                      <Switch
+                        checked={card.isActive}
+                        onCheckedChange={() => toggleCardActive(card)}
+                      />
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(card.createdAt)}

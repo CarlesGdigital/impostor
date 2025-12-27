@@ -20,42 +20,112 @@ export default function JoinWithCodePage() {
   const { user } = useAuth();
   const guestId = useGuestId();
   const { session, players, loading, error } = useGameSession({ joinCode: code });
-  
+
   const [name, setName] = useState('');
   const [gender, setGender] = useState<Gender>('other');
   const [avatarKey, setAvatarKey] = useState('');
   const [joining, setJoining] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<{
+    display_name: string;
+    gender: Gender;
+    avatar_key: string;
+    photo_url: string | null;
+  } | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  // Fetch profile for authenticated users
+  useEffect(() => {
+    if (!user) return;
+
+    setProfileLoading(true);
+    supabase
+      .from('profiles')
+      .select('display_name, gender, avatar_key, photo_url')
+      .eq('id', user.id)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data?.display_name) {
+          setProfile(data as any);
+        }
+        setProfileLoading(false);
+      });
+  }, [user]);
 
   // Check if already joined
   useEffect(() => {
     if (!session || !guestId) return;
-    
+
     const existingPlayer = players.find(
       p => p.guestId === guestId || p.userId === user?.id
     );
-    
+
     if (existingPlayer) {
       setHasJoined(true);
       setMyPlayerId(existingPlayer.id);
     }
   }, [session, players, guestId, user]);
 
+  // Auto-join for authenticated users with complete profile
+  useEffect(() => {
+    if (!session || !user || !profile || hasJoined || joining || profileLoading) return;
+    if (session.status !== 'lobby') return;
+
+    // Check if already a player
+    const existing = players.find(p => p.userId === user.id);
+    if (existing) return;
+
+    // Auto-join with profile data
+    handleAutoJoin();
+  }, [session, user, profile, players, hasJoined, joining, profileLoading]);
+
   // Navigate to game when dealing starts
   useEffect(() => {
     if (session?.status === 'dealing' && myPlayerId) {
       navigate(`/play/${session.id}/${myPlayerId}`);
     }
-  }, [session?.status, myPlayerId, navigate]);
+  }, [session?.status, myPlayerId, navigate, session?.id]);
+
+  const handleAutoJoin = async () => {
+    if (!session || !profile || !user) return;
+    setJoining(true);
+
+    const finalAvatarKey = profile.avatar_key || getDefaultAvatar(profile.gender || 'other');
+
+    const { data, error: insertError } = await supabase
+      .from('session_players')
+      .insert({
+        session_id: session.id,
+        user_id: user.id,
+        guest_id: null,
+        display_name: profile.display_name,
+        gender: profile.gender || 'other',
+        avatar_key: finalAvatarKey,
+        photo_url: profile.photo_url,
+      })
+      .select()
+      .single();
+
+    setJoining(false);
+
+    if (insertError) {
+      toast.error('Error al unirse');
+      return;
+    }
+
+    setHasJoined(true);
+    setMyPlayerId(data.id);
+    toast.success('¡Te has unido!');
+  };
 
   const handleJoin = async () => {
     if (!session || !name.trim()) return;
-    
+
     setJoining(true);
-    
+
     const finalAvatarKey = avatarKey || getDefaultAvatar(gender);
-    
+
     const { data, error: insertError } = await supabase
       .from('session_players')
       .insert({
@@ -169,7 +239,7 @@ export default function JoinWithCodePage() {
   }
 
   return (
-    <PageLayout 
+    <PageLayout
       title={`Unirse: ${code}`}
       footer={
         <Button
@@ -234,8 +304,8 @@ export default function JoinWithCodePage() {
                 onClick={() => setAvatarKey(avatar.key)}
                 className={cn(
                   'p-3 text-3xl border-2 border-foreground transition-colors',
-                  avatarKey === avatar.key 
-                    ? 'bg-foreground text-background' 
+                  avatarKey === avatar.key
+                    ? 'bg-foreground text-background'
                     : 'bg-card hover:bg-secondary'
                 )}
               >

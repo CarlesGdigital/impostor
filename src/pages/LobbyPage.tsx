@@ -3,12 +3,16 @@ import { PageLayout } from '@/components/layout/PageLayout';
 import { Button } from '@/components/ui/button';
 import { PlayerList } from '@/components/game/PlayerList';
 import { useGameSession } from '@/hooks/useGameSession';
+import { useAuth } from '@/hooks/useAuth';
+import { useGuestId } from '@/hooks/useGuestId';
 import { toast } from 'sonner';
 import { Copy, Share2, Users, Lock, AlertTriangle } from 'lucide-react';
 
 export default function LobbyPage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const guestId = useGuestId();
   const { session, players, loading, error, startDealing, updateSessionStatus } = useGameSession({ sessionId });
 
   const handleCopyCode = () => {
@@ -20,9 +24,9 @@ export default function LobbyPage() {
 
   const handleShareLink = async () => {
     if (!session?.joinCode) return;
-    
+
     const url = `${window.location.origin}/join/${session.joinCode}`;
-    
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -50,7 +54,7 @@ export default function LobbyPage() {
       toast.error('Mínimo 3 jugadores');
       return;
     }
-    
+
     // Validate topo count
     const maxAllowedTopos = Math.floor(players.length / 2);
     if (session && session.topoCount > maxAllowedTopos) {
@@ -59,13 +63,23 @@ export default function LobbyPage() {
     }
 
     const success = await startDealing();
-    
+
     if (!success) {
       toast.error(error || 'Error al iniciar el reparto');
       return;
     }
-    
-    navigate(`/game/${sessionId}`);
+
+    // Find host's player entry and redirect to play page
+    const hostPlayer = players.find(p =>
+      (user?.id && p.userId === user.id) ||
+      (!user && guestId && p.guestId === guestId)
+    );
+    if (hostPlayer) {
+      navigate(`/play/${sessionId}/${hostPlayer.id}`);
+    } else {
+      // Fallback to game page if host not found
+      navigate(`/game/${sessionId}`);
+    }
   };
 
   if (loading) {
@@ -95,7 +109,7 @@ export default function LobbyPage() {
   const topoWarning = session.topoCount > maxAllowedTopos && players.length >= 3;
 
   return (
-    <PageLayout 
+    <PageLayout
       title="Sala de espera"
       footer={
         <div className="space-y-3">
@@ -105,9 +119,9 @@ export default function LobbyPage() {
               Cerrar sala
             </Button>
           )}
-          <Button 
-            onClick={handleStart} 
-            disabled={players.length < 3 || topoWarning} 
+          <Button
+            onClick={handleStart}
+            disabled={players.length < 3 || topoWarning}
             className="w-full h-16 text-xl font-bold"
           >
             Iniciar reparto ({players.length}/3 mín.)
@@ -119,8 +133,8 @@ export default function LobbyPage() {
         {/* Join code */}
         {session.joinCode && !isClosed && (
           <div className="space-y-3">
-            <button 
-              onClick={handleCopyCode} 
+            <button
+              onClick={handleCopyCode}
               className="w-full p-6 border-2 border-foreground bg-card text-center active:bg-secondary transition-colors"
             >
               <p className="text-sm text-muted-foreground mb-2">Código de sala</p>
@@ -129,10 +143,10 @@ export default function LobbyPage() {
                 <Copy className="w-6 h-6" />
               </div>
             </button>
-            
-            <Button 
-              onClick={handleShareLink} 
-              variant="outline" 
+
+            <Button
+              onClick={handleShareLink}
+              variant="outline"
               className="w-full h-12 text-lg font-bold border-2"
             >
               <Share2 className="w-5 h-5 mr-2" />
@@ -180,7 +194,7 @@ export default function LobbyPage() {
               </span>
             )}
           </div>
-          
+
           {players.length === 0 ? (
             <div className="p-8 border-2 border-dashed border-foreground/30 text-center">
               <p className="text-muted-foreground">

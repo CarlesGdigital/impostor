@@ -11,18 +11,20 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Loader2, CheckCircle, XCircle, Pencil } from 'lucide-react';
 import type { Pack } from '@/types/admin';
 
 const AdminPacksPage = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { isAdmin, loading: roleLoading } = useUserRole();
-  
+
   const [packs, setPacks] = useState<Pack[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingPack, setEditingPack] = useState<Pack | null>(null);
   const [formName, setFormName] = useState('');
   const [formActive, setFormActive] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -45,12 +47,12 @@ const AdminPacksPage = () => {
 
   const fetchPacks = async () => {
     setLoading(true);
-    
+
     const { data } = await supabase
       .from('packs')
       .select('*')
       .order('name');
-    
+
     setPacks((data || []).map(p => ({
       id: p.id,
       name: p.name,
@@ -71,7 +73,7 @@ const AdminPacksPage = () => {
     setSaving(true);
 
     const slug = formName.trim().toLowerCase().replace(/\s+/g, '-');
-    
+
     const { error } = await supabase
       .from('packs')
       .insert({ name: formName.trim(), slug, is_active: formActive });
@@ -99,8 +101,41 @@ const AdminPacksPage = () => {
       .from('packs')
       .update({ is_active: !pack.isActive })
       .eq('id', pack.id);
-    
+
     fetchPacks();
+  };
+
+  const openEditDialog = (pack: Pack) => {
+    setEditingPack(pack);
+    setFormName(pack.name);
+    setShowEditDialog(true);
+  };
+
+  const handleEditPack = async () => {
+    if (!editingPack || !formName.trim()) {
+      toast.error('El nombre es obligatorio');
+      return;
+    }
+
+    setSaving(true);
+
+    const { error } = await supabase
+      .from('packs')
+      .update({ name: formName.trim() })
+      .eq('id', editingPack.id);
+
+    if (error) {
+      toast.error('Error al guardar');
+      setSaving(false);
+      return;
+    }
+
+    toast.success('Categoría actualizada');
+    setShowEditDialog(false);
+    setEditingPack(null);
+    setFormName('');
+    fetchPacks();
+    setSaving(false);
   };
 
   const formatDate = (dateStr: string) => {
@@ -159,6 +194,28 @@ const AdminPacksPage = () => {
           </DialogContent>
         </Dialog>
 
+        {/* Edit Dialog */}
+        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar categoría</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Nombre *</Label>
+                <Input
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  placeholder="Nombre de la categoría"
+                />
+              </div>
+              <Button onClick={handleEditPack} disabled={saving} className="w-full">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Guardar'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <div className="border-2 border-border rounded-md overflow-hidden">
           <Table>
             <TableHeader>
@@ -167,12 +224,13 @@ const AdminPacksPage = () => {
                 <TableHead>Slug</TableHead>
                 <TableHead className="w-20">Activa</TableHead>
                 <TableHead className="w-24">Creada</TableHead>
+                <TableHead className="w-20">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {packs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     No hay categorías.
                   </TableCell>
                 </TableRow>
@@ -186,6 +244,11 @@ const AdminPacksPage = () => {
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {formatDate(pack.createdAt)}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="ghost" size="sm" onClick={() => openEditDialog(pack)}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))

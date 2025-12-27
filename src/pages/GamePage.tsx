@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,13 @@ export default function GamePage() {
   const isLastPlayer = currentIndex >= players.length - 1;
 
   const isTopo = useMemo(() => currentPlayer?.role === "topo", [currentPlayer]);
+
+  // Multi-mode redirect: this page is only for single-player pass-the-phone
+  useEffect(() => {
+    if (session?.mode === 'multi') {
+      navigate('/');
+    }
+  }, [session?.mode, navigate]);
 
   // Primer jugador del turno (ordenado por turn_order)
   const firstPlayer = useMemo(() => {

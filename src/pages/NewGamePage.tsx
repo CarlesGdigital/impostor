@@ -100,6 +100,47 @@ export default function NewGamePage() {
         }
         navigate(`/game/${session.id}`);
       } else {
+        // Add host as first player in multiplayer mode
+        let hostPlayerData: {
+          session_id: string;
+          user_id: string | null;
+          guest_id: string | null;
+          display_name: string;
+          gender: string;
+          avatar_key: string;
+          photo_url: string | null;
+          turn_order: number;
+        } = {
+          session_id: session.id,
+          user_id: user?.id || null,
+          guest_id: !user ? guestId : null,
+          display_name: 'Anfitrión',
+          gender: 'other',
+          avatar_key: 'default',
+          photo_url: null,
+          turn_order: 0,
+        };
+
+        // Try to fetch profile for authenticated users
+        if (user?.id) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('display_name, gender, avatar_key, photo_url')
+            .eq('id', user.id)
+            .single();
+
+          if (profile) {
+            hostPlayerData = {
+              ...hostPlayerData,
+              display_name: profile.display_name || 'Anfitrión',
+              gender: profile.gender || 'other',
+              avatar_key: profile.avatar_key || 'default',
+              photo_url: profile.photo_url || null,
+            };
+          }
+        }
+
+        await supabase.from('session_players').insert(hostPlayerData);
         navigate(`/lobby/${session.id}`);
       }
 
