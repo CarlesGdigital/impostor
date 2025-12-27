@@ -9,6 +9,7 @@ interface CardRevealProps {
   onRevealComplete?: () => void;
   revealDuration?: number;
   className?: string;
+  extraNote?: string | null;
 }
 
 export function CardReveal({
@@ -19,14 +20,18 @@ export function CardReveal({
   onRevealComplete,
   revealDuration = 1000,
   className,
+  extraNote,
 }: CardRevealProps) {
   const [isPressed, setIsPressed] = useState(false);
   const [hasRevealed, setHasRevealed] = useState(initialRevealed);
   const [progress, setProgress] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number>(0);
+  const completedRef = useRef(false); // Guard against double calls
 
   const startReveal = useCallback(() => {
+    if (hasRevealed || completedRef.current) return; // Already revealed
+
     setIsPressed(true);
     startTimeRef.current = Date.now();
 
@@ -35,16 +40,17 @@ export function CardReveal({
       const newProgress = Math.min((elapsed / revealDuration) * 100, 100);
       setProgress(newProgress);
 
-      if (elapsed >= revealDuration) {
+      if (elapsed >= revealDuration && !completedRef.current) {
+        completedRef.current = true; // Mark as completed
         setHasRevealed(true);
         onRevealComplete?.();
-      } else {
+      } else if (elapsed < revealDuration) {
         timerRef.current = setTimeout(updateProgress, 50);
       }
     };
 
     timerRef.current = setTimeout(updateProgress, 50);
-  }, [revealDuration, onRevealComplete]);
+  }, [revealDuration, onRevealComplete, hasRevealed]);
 
   const stopReveal = useCallback(() => {
     setIsPressed(false);
@@ -79,6 +85,9 @@ export function CardReveal({
           </>
         ) : (
           <span className="text-5xl font-bold text-center break-words">{word || "Cargando"}</span>
+        )}
+        {extraNote && (
+          <p className="mt-4 text-lg font-bold text-amber-500 text-center">{extraNote}</p>
         )}
         <span className="mt-4 text-muted-foreground">Carta revelada</span>
       </div>

@@ -25,6 +25,7 @@ export default function NewGamePage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selectedPackIds, setSelectedPackIds] = useState<string[]>([]);
+  const [variant, setVariant] = useState<'classic' | 'double_topo' | 'guess_player'>('classic');
 
   const { user } = useAuth();
   const guestId = useGuestId();
@@ -42,6 +43,11 @@ export default function NewGamePage() {
   useEffect(() => {
     if (topoCount > effectiveMaxTopos) setTopoCount(effectiveMaxTopos);
   }, [effectiveMaxTopos, topoCount]);
+
+  // Doble topo siempre requiere 2 topos
+  useEffect(() => {
+    if (variant === 'double_topo') setTopoCount(2);
+  }, [variant]);
 
   const handleAddPlayer = (player: GuestPlayer) => {
     if (players.length >= maxPlayers) {
@@ -76,6 +82,9 @@ export default function NewGamePage() {
         toast.error("Error al crear la partida");
         return;
       }
+
+      // Persistir variant en localStorage
+      localStorage.setItem(`impostor:variant:${session.id}`, variant);
 
       if (mode === "single") {
         for (let i = 0; i < players.length; i++) {
@@ -151,7 +160,7 @@ export default function NewGamePage() {
           <div className="flex items-center gap-4">
             <button
               onClick={() => setTopoCount(Math.max(1, topoCount - 1))}
-              disabled={topoCount <= 1}
+              disabled={topoCount <= 1 || variant === 'double_topo'}
               className="w-14 h-14 border-2 border-foreground text-2xl font-bold disabled:opacity-30"
             >
               -
@@ -161,7 +170,7 @@ export default function NewGamePage() {
 
             <button
               onClick={() => setTopoCount(Math.min(effectiveMaxTopos, topoCount + 1))}
-              disabled={topoCount >= effectiveMaxTopos}
+              disabled={topoCount >= effectiveMaxTopos || variant === 'double_topo'}
               className="w-14 h-14 border-2 border-foreground text-2xl font-bold disabled:opacity-30"
             >
               +
@@ -178,6 +187,43 @@ export default function NewGamePage() {
               Demasiados topos para {players.length} jugadores
             </div>
           )}
+        </div>
+
+        {/* Selector de variante */}
+        <div className="space-y-3">
+          <Label className="text-lg font-bold">Variante de juego</Label>
+          <div className="grid grid-cols-1 gap-2">
+            <button
+              onClick={() => setVariant('classic')}
+              className={cn(
+                "flex flex-col p-4 border-2 border-foreground text-left transition-colors",
+                variant === 'classic' ? "bg-foreground text-background" : "bg-card hover:bg-secondary",
+              )}
+            >
+              <span className="font-bold">Clásico</span>
+              <span className="text-sm opacity-70">El juego tradicional de palabras</span>
+            </button>
+            <button
+              onClick={() => setVariant('double_topo')}
+              className={cn(
+                "flex flex-col p-4 border-2 border-foreground text-left transition-colors",
+                variant === 'double_topo' ? "bg-foreground text-background" : "bg-card hover:bg-secondary",
+              )}
+            >
+              <span className="font-bold">Doble topo (uno confundido)</span>
+              <span className="text-sm opacity-70">2 topos, pero uno cree ser tripulación</span>
+            </button>
+            <button
+              onClick={() => setVariant('guess_player')}
+              className={cn(
+                "flex flex-col p-4 border-2 border-foreground text-left transition-colors",
+                variant === 'guess_player' ? "bg-foreground text-background" : "bg-card hover:bg-secondary",
+              )}
+            >
+              <span className="font-bold">Adivina al jugador</span>
+              <span className="text-sm opacity-70">La palabra es el nombre de un jugador</span>
+            </button>
+          </div>
         </div>
 
         {mode === "single" && (
