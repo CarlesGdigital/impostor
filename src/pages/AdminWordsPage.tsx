@@ -5,15 +5,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Upload, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Upload, Loader2, CheckCircle, XCircle, Trash2, Check, X, AlertTriangle } from 'lucide-react';
 import type { Pack, Card } from '@/types/admin';
+import { cardService } from '@/services/cardService';
 
 const AdminWordsPage = () => {
   const navigate = useNavigate();
@@ -23,6 +26,13 @@ const AdminWordsPage = () => {
   const [cards, setCards] = useState<Card[]>([]);
   const [packs, setPacks] = useState<Pack[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [bulkActioning, setBulkActioning] = useState(false);
+  const [affectedSessionCount, setAffectedSessionCount] = useState<number | null>(null);
+  const [checkingAffected, setCheckingAffected] = useState(false);
 
   // Form state
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -70,6 +80,7 @@ const AdminWordsPage = () => {
       name: p.name,
       slug: p.slug,
       isActive: p.is_active,
+      masterCategory: (p as any).master_category || 'general',
       createdAt: p.created_at,
     })));
 
@@ -97,6 +108,126 @@ const AdminWordsPage = () => {
     })));
 
     setLoading(false);
+  };
+
+  // === SELECTION HELPERS ===
+  const toggleOne = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedIds.size === cards.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(cards.map(c => c.id)));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const isAllSelected = cards.length > 0 && selectedIds.size === cards.length;
+  const hasSelection = selectedIds.size > 0;
+
+  // === BULK ACTIONS ===
+  const processInBatches = async (
+    ids: string[],
+    action: (chunk: string[]) => PromiseLike<any>,
+    successMessage: string,
+    errorMessage: string
+  ) => {
+    setBulkActioning(true);
+    const BATCH_SIZE = 50;
+    let successCount = 0;
+    let errorOccurred = false;
+
+    try {
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const chunk = ids.slice(i, i + BATCH_SIZE);
+        const { error } = await action(chunk);
+
+        if (error) {
+          console.error('[BulkAction] Error processing chunk:', error);
+          toast.error(`${errorMessage} (lote ${i / BATCH_SIZE + 1}): ${error.message}`);
+          errorOccurred = true;
+          break;
+        }
+        successCount += chunk.length;
+      }
+
+      if (successCount > 0) {
+        toast.success(`${successCount} ${successMessage}` + (errorOccurred ? ' (interrumpido por error)' : ''));
+        await fetchData();
+        clearSelection();
+      }
+    } catch (e: any) {
+      console.error('[BulkAction] Unexpected error:', e);
+      toast.error(`Error inesperado: ${e.message}`);
+    } finally {
+      setBulkActioning(false);
+      setShowDeleteConfirm(false); // Close dialog if it was open
+      setAffectedSessionCount(null);
+    }
+  };
+
+  const handlePreDeleteCheck = async () => {
+    if (!hasSelection) return;
+    setCheckingAffected(true);
+    setAffectedSessionCount(null);
+
+    try {
+      const count = await cardService.countAffectedSessions([...selectedIds]);
+      setAffectedSessionCount(count);
+
+      setShowDeleteConfirm(true);
+    } catch (e) {
+      console.error('[PreDelete] Exception:', e);
+      setShowDeleteConfirm(true);
+    } finally {
+      setCheckingAffected(false);
+    }
+  };
+
+  const handleBulkEnable = async () => {
+    if (!hasSelection) return;
+
+    await processInBatches(
+      [...selectedIds],
+      (chunk) => supabase.from('cards').update({ is_active: true }).in('id', chunk),
+      'palabras habilitadas',
+      'Error al habilitar'
+    );
+  };
+
+  const handleBulkDisable = async () => {
+    if (!hasSelection) return;
+
+    await processInBatches(
+      [...selectedIds],
+      (chunk) => supabase.from('cards').update({ is_active: false }).in('id', chunk),
+      'palabras archivadas',
+      'Error al archivar'
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (!hasSelection) return;
+
+    await processInBatches(
+      [...selectedIds],
+      (chunk) => cardService.deleteCards(chunk),
+      'palabras eliminadas definitivamente',
+      'Error al eliminar'
+    );
   };
 
   const handleAddWord = async () => {
@@ -293,7 +424,97 @@ const AdminWordsPage = () => {
 
   return (
     <PageLayout title="Palabras">
-      <div className="space-y-6">
+      <div className="space-y-4">
+        {/* Bulk Action Bar */}
+        {hasSelection && (
+          <div className="sticky top-0 z-10 bg-card border-2 border-primary rounded-md p-4 flex flex-wrap items-center gap-3">
+            <span className="font-bold text-primary">
+              Seleccionadas: {selectedIds.size}
+            </span>
+            <div className="flex-1" />
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkEnable}
+              disabled={bulkActioning}
+              className="gap-1"
+            >
+              <Check className="w-4 h-4" />
+              Habilitar
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleBulkDisable}
+              disabled={bulkActioning}
+              className="gap-1"
+            >
+              <X className="w-4 h-4" />
+              Archivar
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handlePreDeleteCheck}
+              disabled={bulkActioning || checkingAffected}
+              className="gap-1"
+            >
+              {checkingAffected ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              Eliminar definitivamente
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={clearSelection}
+              disabled={bulkActioning}
+            >
+              Limpiar
+            </Button>
+          </div>
+        )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar definitivamente?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Se borrarán permanentemente {selectedIds.size} palabras.
+                <br />
+                <br />
+                {affectedSessionCount !== null && affectedSessionCount > 0 ? (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500 rounded-md text-amber-600 space-y-1">
+                    <p className="font-bold flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4" />
+                      Atención
+                    </p>
+                    <p className="text-sm">
+                      Estas cartas se usan en <strong>{affectedSessionCount} partidas históricas</strong>.
+                    </p>
+                    <p className="text-xs opacity-90">
+                      Al eliminar, se mantendrá el histórico (palabra/pista) pero perderán el enlace a la carta original.
+                    </p>
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground">
+                    No se han encontrado partidas afectadas (o no se pudo comprobar).
+                  </span>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkActioning}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleBulkDelete}
+                disabled={bulkActioning}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {bulkActioning ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Eliminar'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Actions */}
         <div className="flex gap-3">
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -422,6 +643,12 @@ animales, León, Rey de la selva, 1, true"
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={isAllSelected}
+                    onCheckedChange={toggleAll}
+                  />
+                </TableHead>
                 <TableHead>Categoría</TableHead>
                 <TableHead>Palabra</TableHead>
                 <TableHead>Pista</TableHead>
@@ -434,13 +661,19 @@ animales, León, Rey de la selva, 1, true"
             <TableBody>
               {cards.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                     No hay palabras. Añade la primera.
                   </TableCell>
                 </TableRow>
               ) : (
                 cards.map((card) => (
-                  <TableRow key={card.id}>
+                  <TableRow key={card.id} className={selectedIds.has(card.id) ? 'bg-primary/10' : ''}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(card.id)}
+                        onCheckedChange={() => toggleOne(card.id)}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">{card.packName}</TableCell>
                     <TableCell className="font-bold">{card.word}</TableCell>
                     <TableCell className="text-muted-foreground">{card.clue}</TableCell>

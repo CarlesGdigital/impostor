@@ -16,6 +16,7 @@ import PlayPage from "./pages/PlayPage";
 import AdminPage from "./pages/AdminPage";
 import AdminWordsPage from "./pages/AdminWordsPage";
 import AdminPacksPage from "./pages/AdminPacksPage";
+import AdminUsersPage from "./pages/AdminUsersPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +41,7 @@ const App = () => (
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/words" element={<AdminWordsPage />} />
             <Route path="/admin/packs" element={<AdminPacksPage />} />
+            <Route path="/admin/users" element={<AdminUsersPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

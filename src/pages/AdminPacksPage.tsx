@@ -11,8 +11,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Loader2, CheckCircle, XCircle, Pencil } from 'lucide-react';
-import type { Pack } from '@/types/admin';
+import { Plus, Loader2, CheckCircle, XCircle, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { Pack, MasterCategory } from '@/types/admin';
 
 const AdminPacksPage = () => {
   const navigate = useNavigate();
@@ -26,8 +28,13 @@ const AdminPacksPage = () => {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingPack, setEditingPack] = useState<Pack | null>(null);
   const [formName, setFormName] = useState('');
+  const [formMasterCategory, setFormMasterCategory] = useState<MasterCategory>('general');
   const [formActive, setFormActive] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Delete state
+  const [packToDelete, setPackToDelete] = useState<Pack | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !roleLoading) {
@@ -53,11 +60,13 @@ const AdminPacksPage = () => {
       .select('*')
       .order('name');
 
-    setPacks((data || []).map(p => ({
+    setPacks((data || []).map((p: any) => ({
       id: p.id,
       name: p.name,
       slug: p.slug,
       isActive: p.is_active,
+      // Map legacy/null values
+      masterCategory: (p.master_category === 'adultos' ? 'ninos' : (p.master_category || 'general')) as MasterCategory,
       createdAt: p.created_at,
     })));
 
@@ -76,7 +85,12 @@ const AdminPacksPage = () => {
 
     const { error } = await supabase
       .from('packs')
-      .insert({ name: formName.trim(), slug, is_active: formActive });
+      .insert({
+        name: formName.trim(),
+        slug,
+        is_active: formActive,
+        master_category: formMasterCategory
+      });
 
     if (error) {
       if (error.code === '23505') {
@@ -91,6 +105,7 @@ const AdminPacksPage = () => {
     toast.success('Categoría creada');
     setShowAddDialog(false);
     setFormName('');
+    setFormMasterCategory('general');
     setFormActive(true);
     fetchPacks();
     setSaving(false);
@@ -108,6 +123,7 @@ const AdminPacksPage = () => {
   const openEditDialog = (pack: Pack) => {
     setEditingPack(pack);
     setFormName(pack.name);
+    setFormMasterCategory(pack.masterCategory);
     setShowEditDialog(true);
   };
 
@@ -121,7 +137,10 @@ const AdminPacksPage = () => {
 
     const { error } = await supabase
       .from('packs')
-      .update({ name: formName.trim() })
+      .update({
+        name: formName.trim(),
+        master_category: formMasterCategory
+      })
       .eq('id', editingPack.id);
 
     if (error) {
@@ -134,8 +153,52 @@ const AdminPacksPage = () => {
     setShowEditDialog(false);
     setEditingPack(null);
     setFormName('');
+    setFormMasterCategory('general');
     fetchPacks();
     setSaving(false);
+  };
+
+  const handleDeleteClick = (pack: Pack) => {
+    setPackToDelete(pack);
+  };
+
+  const confirmDeletePack = async () => {
+    if (!packToDelete) return;
+
+    setDeleting(true);
+    try {
+      console.info('[DeletePack] Deleting cards for pack:', packToDelete.id);
+
+      // 1. Delete all cards in this pack
+      const { error: cardsError } = await supabase
+        .from('cards')
+        .delete()
+        .eq('pack_id', packToDelete.id);
+
+      if (cardsError) {
+        throw new Error(`Error al eliminar palabras: ${cardsError.message}`);
+      }
+
+      // 2. Delete the pack itself
+      console.info('[DeletePack] Deleting pack:', packToDelete.id);
+      const { error: packError } = await supabase
+        .from('packs')
+        .delete()
+        .eq('id', packToDelete.id);
+
+      if (packError) {
+        throw new Error(`Error al eliminar la categoría: ${packError.message}`);
+      }
+
+      toast.success('Categoría eliminada correctamente');
+      setPackToDelete(null);
+      fetchPacks();
+    } catch (e: any) {
+      console.error('[DeletePack] Failed:', e);
+      toast.error(e.message || 'Error al eliminar');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -183,6 +246,19 @@ const AdminPacksPage = () => {
                   placeholder="Ej: Animales"
                 />
               </div>
+              <div className="space-y-2">
+                <Label>Categoría Superior</Label>
+                <Select value={formMasterCategory} onValueChange={(v) => setFormMasterCategory(v as MasterCategory)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="general">General</SelectItem>
+                    <SelectItem value="ninos">Niños</SelectItem>
+                    <SelectItem value="benicolet">Benicolet</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex items-center gap-2">
                 <Switch checked={formActive} onCheckedChange={setFormActive} />
                 <Label>Activa</Label>
@@ -209,6 +285,19 @@ const AdminPacksPage = () => {
                   placeholder="Nombre de la categoría"
                 />
               </div>
+              <div className="space-y-2">
+                <Label>Categoría Superior</Label>
+                <Select value={formMasterCategory} onValueChange={(v) => setFormMasterCategory(v as MasterCategory)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="general">General</SelectItem>
+                    <SelectItem value="ninos">Niños</SelectItem>
+                    <SelectItem value="benicolet">Benicolet</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button onClick={handleEditPack} disabled={saving} className="w-full">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Guardar'}
               </Button>
@@ -216,21 +305,52 @@ const AdminPacksPage = () => {
           </DialogContent>
         </Dialog>
 
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!packToDelete} onOpenChange={(open) => !open && setPackToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="w-5 h-5" />
+                ¿Eliminar categoría "{packToDelete?.name}"?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción borrará la categoría <strong>y todas sus palabras asociadas</strong>.
+                <br /><br />
+                Esta acción no se puede deshacer.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  confirmDeletePack();
+                }}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Eliminar todo'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <div className="border-2 border-border rounded-md overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Nombre</TableHead>
+                <TableHead>Categoría</TableHead>
                 <TableHead>Slug</TableHead>
                 <TableHead className="w-20">Activa</TableHead>
                 <TableHead className="w-24">Creada</TableHead>
-                <TableHead className="w-20">Acciones</TableHead>
+                <TableHead className="w-24">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {packs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     No hay categorías.
                   </TableCell>
                 </TableRow>
@@ -238,6 +358,10 @@ const AdminPacksPage = () => {
                 packs.map((pack) => (
                   <TableRow key={pack.id}>
                     <TableCell className="font-bold">{pack.name}</TableCell>
+                    <TableCell>
+                      {pack.masterCategory === 'ninos' ? 'Niños' :
+                        pack.masterCategory === 'benicolet' ? 'Benicolet' : 'General'}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{pack.slug}</TableCell>
                     <TableCell>
                       <Switch checked={pack.isActive} onCheckedChange={() => toggleActive(pack)} />
@@ -246,9 +370,14 @@ const AdminPacksPage = () => {
                       {formatDate(pack.createdAt)}
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => openEditDialog(pack)}>
-                        <Pencil className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(pack)}>
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(pack)} className="text-destructive hover:text-destructive">
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

@@ -33,8 +33,8 @@ const Index = () => {
               onClick={() => setSelectedMode('single')}
               className={cn(
                 'flex flex-col items-center gap-3 p-6 border-2 border-foreground transition-all',
-                selectedMode === 'single' 
-                  ? 'bg-foreground text-background shadow-md' 
+                selectedMode === 'single'
+                  ? 'bg-foreground text-background shadow-md'
                   : 'bg-card hover:bg-secondary'
               )}
             >
@@ -51,8 +51,8 @@ const Index = () => {
               onClick={() => setSelectedMode('multi')}
               className={cn(
                 'flex flex-col items-center gap-3 p-6 border-2 border-foreground transition-all',
-                selectedMode === 'multi' 
-                  ? 'bg-foreground text-background shadow-md' 
+                selectedMode === 'multi'
+                  ? 'bg-foreground text-background shadow-md'
                   : 'bg-card hover:bg-secondary'
               )}
             >
@@ -127,8 +127,19 @@ const Index = () => {
       </div>
 
       {/* Footer info */}
-      <div className="text-center py-4 text-sm text-muted-foreground">
+      <div className="text-center py-4 text-sm text-muted-foreground space-y-1">
         <p>Versión 1.0 • Hecho para jugar en persona</p>
+        <p>
+          Hecho por Carles Gregori · {' '}
+          <a
+            href="https://carlesgregori.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:text-primary transition-colors"
+          >
+            carlesgregori.com
+          </a>
+        </p>
       </div>
     </PageLayout>
   );

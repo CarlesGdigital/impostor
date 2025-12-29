@@ -7,146 +7,85 @@
 
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
+Dark/Gold Mystery Theme
 */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 0%;
+    /* Dark charcoal background */
+    --background: 220 20% 8%;
+    --foreground: 45 30% 85%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 0%;
+    /* Cards - slightly elevated dark surface */
+    --card: 220 18% 12%;
+    --card-foreground: 45 30% 90%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 0%;
+    /* Popover */
+    --popover: 220 18% 10%;
+    --popover-foreground: 45 30% 90%;
 
-    --primary: 0 0% 0%;
-    --primary-foreground: 0 0% 100%;
+    /* Primary - Gold accent */
+    --primary: 43 85% 55%;
+    --primary-foreground: 220 20% 8%;
 
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 0%;
+    /* Secondary - Muted dark */
+    --secondary: 220 15% 18%;
+    --secondary-foreground: 45 30% 85%;
 
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
+    /* Muted - Subtle backgrounds */
+    --muted: 220 15% 15%;
+    --muted-foreground: 45 15% 55%;
 
-    --accent: 0 0% 90%;
-    --accent-foreground: 0 0% 0%;
+    /* Accent - Gold-tinted */
+    --accent: 43 50% 25%;
+    --accent-foreground: 45 30% 90%;
 
-    --destructive: 0 84% 60%;
+    /* Destructive */
+    --destructive: 0 70% 45%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 0%;
-    --input: 0 0% 0%;
-    --ring: 0 0% 0%;
+    /* Borders - Subtle gold */
+    --border: 43 30% 25%;
+    --input: 43 30% 25%;
+    --ring: 43 85% 55%;
 
-    --radius: 0rem;
+    --radius: 0.5rem;
 
-    --sidebar-background: 0 0% 98%;
+    /* Sidebar */
+    --sidebar-background: 220 20% 6%;
+    --sidebar-foreground: 45 30% 85%;
+    --sidebar-primary: 43 85% 55%;
+    --sidebar-primary-foreground: 220 20% 8%;
+    --sidebar-accent: 43 50% 25%;
+    --sidebar-accent-foreground: 45 30% 90%;
+    --sidebar-border: 43 30% 25%;
+    --sidebar-ring: 43 85% 55%;
+    --sidebar: 220 20% 6%;
 
-    --sidebar-foreground: 0 0% 0%;
-
-    --sidebar-primary: 0 0% 0%;
-
-    --sidebar-primary-foreground: 0 0% 100%;
-
-    --sidebar-accent: 0 0% 90%;
-
-    --sidebar-accent-foreground: 0 0% 0%;
-
-    --sidebar-border: 0 0% 0%;
-
-    --sidebar-ring: 0 0% 0%;
-
-    --chart-1: 12 76% 61%;
-
-    --chart-2: 173 58% 39%;
-
-    --chart-3: 197 37% 24%;
-
-    --chart-4: 43 74% 66%;
-
-    --chart-5: 27 87% 67%;
-
-    --sidebar: 0 0% 98%;
-
-    --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
-
-    --font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
-
-    --font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-
-    --shadow-2xs: 1px 1px 0px 0px #000000;
-
-    --shadow-xs: 2px 2px 0px 0px #000000;
-
-    --shadow-sm: 3px 3px 0px 0px #000000;
-
-    --shadow: 5px 5px 0px 0px #000000;
-
-    --shadow-md: 8px 8px 0px 0px #000000;
-
-    --shadow-lg: 12px 12px 0px 0px #000000;
-
-    --shadow-xl: 16px 16px 0px 0px #000000;
-
-    --shadow-2xl: 24px 24px 0px 0px #000000;
-
-    --tracking-normal: 0em;
-
-    --spacing: 0.25rem;
-  }
-
-  .dark {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 100%;
-
-    --card: 0 0% 0%;
-    --card-foreground: 0 0% 100%;
-
-    --popover: 0 0% 0%;
-    --popover-foreground: 0 0% 100%;
-
-    --primary: 0 0% 100%;
-    --primary-foreground: 0 0% 0%;
-
-    --secondary: 0 0% 15%;
-    --secondary-foreground: 0 0% 100%;
-
-    --muted: 0 0% 15%;
-    --muted-foreground: 0 0% 65%;
-
-    --accent: 0 0% 15%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 0 0% 100%;
-    --input: 0 0% 100%;
-    --ring: 0 0% 100%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 0 0% 100%;
-    --sidebar-primary-foreground: 0 0% 0%;
-    --sidebar-accent: 0 0% 15%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 0 0% 100%;
-    --sidebar-ring: 0 0% 100%;
-    --chart-1: 220 70% 50%;
+    /* Charts */
+    --chart-1: 43 85% 55%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
-    --sidebar: 0 0% 5%;
-    --radius: 0rem;
-    --shadow-2xs: 1px 1px 0px 0px #ffffff;
-    --shadow-xs: 2px 2px 0px 0px #ffffff;
-    --shadow-sm: 3px 3px 0px 0px #ffffff;
-    --shadow: 5px 5px 0px 0px #ffffff;
-    --shadow-md: 8px 8px 0px 0px #ffffff;
-    --shadow-lg: 12px 12px 0px 0px #ffffff;
-    --shadow-xl: 16px 16px 0px 0px #ffffff;
-    --shadow-2xl: 24px 24px 0px 0px #ffffff;
+
+    /* Typography */
+    --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+    --font-serif: 'Lora', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+    --font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+
+    /* Shadows with gold tint */
+    --shadow-2xs: 1px 1px 0px 0px hsl(43 40% 20% / 0.5);
+    --shadow-xs: 2px 2px 0px 0px hsl(43 40% 20% / 0.5);
+    --shadow-sm: 3px 3px 0px 0px hsl(43 40% 20% / 0.5);
+    --shadow: 5px 5px 0px 0px hsl(43 40% 20% / 0.5);
+    --shadow-md: 8px 8px 0px 0px hsl(43 40% 20% / 0.5);
+    --shadow-lg: 12px 12px 0px 0px hsl(43 40% 20% / 0.5);
+    --shadow-xl: 16px 16px 0px 0px hsl(43 40% 20% / 0.5);
+    --shadow-2xl: 24px 24px 0px 0px hsl(43 40% 20% / 0.5);
+
+    --tracking-normal: 0em;
+    --spacing: 0.25rem;
   }
 }
 
@@ -157,5 +96,18 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Custom gold text class */
+  .text-gold {
+    color: hsl(43 85% 55%);
+  }
+
+  /* Gold gradient text */
+  .text-gold-gradient {
+    background: linear-gradient(135deg, hsl(43 85% 65%) 0%, hsl(43 85% 45%) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }

@@ -1,5 +1,5 @@
 export type GameMode = 'single' | 'multi';
-export type GameStatus = 'lobby' | 'dealing' | 'ready' | 'finished' | 'closed';
+export type GameStatus = 'lobby' | 'dealing' | 'ready' | 'discussion' | 'finished' | 'closed';
 export type PlayerRole = 'crew' | 'topo';
 export type Gender = 'male' | 'female' | 'other';
 
@@ -31,6 +31,7 @@ export interface GameSession {
   wordText?: string;
   clueText?: string;
   selectedPackIds?: string[];
+  firstSpeakerPlayerId?: string;
   createdAt: string;
 }
 

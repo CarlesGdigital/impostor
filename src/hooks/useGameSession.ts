@@ -15,6 +15,10 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
   const [waitingForAssignment, setWaitingForAssignment] = useState(false);
   const [dealingRequested, setDealingRequested] = useState(false);
 
+  // Local phase state for non-persisted phases (e.g. discussion)
+  const [localPhase, setLocalPhase] = useState<GameStatus>('lobby');
+  const [localFirstSpeakerId, setLocalFirstSpeakerId] = useState<string | null>(null);
+
   const mapSession = (data: any): GameSession => ({
     id: data.id,
     hostUserId: data.host_user_id,
@@ -29,6 +33,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     wordText: data.word_text,
     clueText: data.clue_text,
     selectedPackIds: data.selected_pack_ids,
+    firstSpeakerPlayerId: data.first_speaker_player_id,
     createdAt: data.created_at,
   });
 
@@ -90,6 +95,21 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     fetchSession();
   }, [fetchSession]);
 
+  // Sync local phase with DB status when it changes (only for persisted phases)
+  useEffect(() => {
+    if (session?.status) {
+      // If DB status is finished, always respect it
+      if (session.status === 'finished' || session.status === 'closed') {
+        setLocalPhase(session.status);
+      }
+      // If we are currently in a lobby/dealing/ready state in DB, sync it
+      // UNLESS we are in 'discussion' locally and DB is still sticking to 'dealing'
+      else if (session.status !== 'finished' && localPhase !== 'discussion') {
+        setLocalPhase(session.status);
+      }
+    }
+  }, [session?.status]);
+
   // Realtime subscription
   useEffect(() => {
     if (!session?.id) return;
@@ -127,7 +147,10 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
           filter: `session_id=eq.${session.id}`,
         },
         (payload) => {
-          console.info('[realtime] session_players payload:', payload.eventType);
+          console.info('[realtime] session_players payload:', payload.eventType, {
+            playerId: (payload.new as any)?.id,
+            hasRevealed: (payload.new as any)?.has_revealed,
+          });
           // Refetch players on any change
           supabase
             .from('session_players')
@@ -135,12 +158,59 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
             .eq('session_id', session.id)
             .order('turn_order', { ascending: true })
             .then(({ data }) => {
-              setPlayers((data || []).map(mapPlayer));
+              const mapped = (data || []).map(mapPlayer);
+              // Use functional update to ensure we have latest players
+              setPlayers(mapped);
             });
         }
       )
+      // Broadcast channel for phase synchronization (non-persisted phases)
+      .on('broadcast', { event: 'phase_change' }, ({ payload }) => {
+        console.info('[realtime] phase_change received:', payload);
+        if (payload.phase) {
+          setLocalPhase(payload.phase);
+        }
+        if (payload.firstSpeakerPlayerId) {
+          setLocalFirstSpeakerId(payload.firstSpeakerPlayerId);
+        }
+      })
+      .on('broadcast', { event: 'phase_sync_request' }, async ({ payload }) => {
+        console.info('[realtime] phase_sync_request received:', payload);
+        // If I am host, respond with my current state
+        // We check current user against session host
+        const { data: { user } } = await supabase.auth.getUser();
+        const currentUserId = user?.id;
+        // Host check: user ID matches hostUserId OR local memory says I'm guest host
+        const isHost = (currentUserId && session.hostUserId === currentUserId) ||
+          (!currentUserId && typeof window !== 'undefined' && localStorage.getItem('impostor_guest_id') === session.hostGuestId);
+
+        if (isHost && localPhase === 'discussion') {
+          console.info('[realtime] Responding to sync request as host');
+          await sessionChannel.send({
+            type: 'broadcast',
+            event: 'phase_sync_state',
+            payload: {
+              phase: localPhase,
+              firstSpeakerPlayerId: localFirstSpeakerId
+            }
+          });
+        }
+      })
+      .on('broadcast', { event: 'phase_sync_state' }, ({ payload }) => {
+        console.info('[realtime] phase_sync_state received:', payload);
+        if (payload.phase) setLocalPhase(payload.phase);
+        if (payload.firstSpeakerPlayerId) setLocalFirstSpeakerId(payload.firstSpeakerPlayerId);
+      })
       .subscribe((status) => {
         console.info('[realtime] subscribed, status:', status);
+        if (status === 'SUBSCRIBED') {
+          // Request sync when connected
+          sessionChannel.send({
+            type: 'broadcast',
+            event: 'phase_sync_request',
+            payload: { ts: Date.now() }
+          });
+        }
       });
 
     return () => {
@@ -210,48 +280,103 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     hostGuestId?: string,
     selectedPackIds?: string[]
   ): Promise<GameSession | null> => {
-    console.info('[createSession] Creating session with word preload', { mode, topoCount, selectedPackIds });
+    console.info('[createSession] Creating session', { mode, topoCount, packCount: selectedPackIds?.length || 0 });
 
-    // 1) Preload a random word/clue
-    let randomCard: { id: string; word: string; clue: string } | null = null;
-
-    // Build query with selected packs filter
-    let cardsQuery = supabase.from('cards').select('id, word, clue, pack_id').eq('is_active', true);
-
-    if (selectedPackIds && selectedPackIds.length > 0) {
-      cardsQuery = cardsQuery.in('pack_id', selectedPackIds);
+    // Validate pack selection
+    if (!selectedPackIds || selectedPackIds.length === 0) {
+      console.error('[createSession] Step 1 FAIL: No pack_ids provided');
+      setError('No hay categorías seleccionadas');
+      return null;
     }
 
-    const { data: cardsData, error: cardsError } = await cardsQuery;
+    // Step 1: Get random card via RPC (efficient, server-side random selection)
+    console.info('[createSession] Step 1: Getting random card via RPC...', { packCount: selectedPackIds.length });
 
-    console.debug('[createSession] Cards found:', cardsData?.length || 0, cardsError ? `Error: ${cardsError.message}` : '');
+    let randomCard: { id: string; word: string; clue: string; pack_id: string } | null = null;
 
-    if (cardsData && cardsData.length > 0) {
-      const randomIndex = Math.floor(Math.random() * cardsData.length);
-      randomCard = cardsData[randomIndex];
-      console.debug('[createSession] Card selected:', randomCard);
-    } else {
-      // Fallback to old words table
-      console.debug('[createSession] No cards in cards table, trying words table...');
-      const { data: wordData, error: wordError } = await supabase
-        .from('words')
-        .select('id, word, clue')
-        .eq('is_active', true);
+    try {
+      // Cast to any because generated types don't include our new RPC function yet
+      const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('get_random_card', {
+        pack_ids: selectedPackIds
+      });
 
-      console.debug('[createSession] Words found in words table:', wordData?.length || 0, wordError ? `Error: ${wordError.message}` : '');
+      if (rpcError) {
+        // Log error details for debugging
+        console.warn('[createSession] Step 1a: RPC failed', {
+          code: rpcError.code,
+          message: rpcError.message
+        });
 
-      if (wordData && wordData.length > 0) {
-        randomCard = wordData[Math.floor(Math.random() * wordData.length)];
-        console.debug('[createSession] Word selected from words table:', randomCard);
+        // If RPC not available (404/PGRST202), use fallback
+        if (rpcError.code === 'PGRST202' || rpcError.message?.includes('Could not find')) {
+          console.info('[createSession] Step 1b: RPC not available, using fallback (random pack + single card)...');
+
+          // Pick a random pack from selection
+          const randomPackId = selectedPackIds[Math.floor(Math.random() * selectedPackIds.length)];
+          console.info('[createSession] Step 1b: Selected random pack', { randomPackId });
+
+          // Fetch just 1 card from that pack (small, fast query)
+          const { data: cardData, error: cardError } = await supabase
+            .from('cards')
+            .select('id, word, clue, pack_id')
+            .eq('is_active', true)
+            .eq('pack_id', randomPackId)
+            .limit(1)
+            .single();
+
+          if (cardError || !cardData) {
+            console.error('[createSession] Step 1b FAIL: No cards in random pack', { randomPackId, error: cardError });
+            setError('No hay palabras activas en las categorías seleccionadas');
+            return null;
+          }
+
+          randomCard = cardData;
+          console.info('[createSession] Step 1b OK: Card from fallback', { word: randomCard.word });
+        } else {
+          // Other RPC error - not recoverable
+          console.error('[createSession] Step 1 FAIL: RPC error', rpcError);
+          setError(`Error al obtener carta: ${rpcError.message}`);
+          return null;
+        }
+      } else if (!rpcData || !Array.isArray(rpcData) || rpcData.length === 0) {
+        console.warn('[createSession] Step 1: RPC returned empty, using fallback...');
+
+        // Pick a random pack from selection
+        const randomPackId = selectedPackIds[Math.floor(Math.random() * selectedPackIds.length)];
+        const { data: cardData, error: cardError } = await supabase
+          .from('cards')
+          .select('id, word, clue, pack_id')
+          .eq('is_active', true)
+          .eq('pack_id', randomPackId)
+          .limit(1)
+          .single();
+
+        if (cardError || !cardData) {
+          console.error('[createSession] Step 1 FAIL: No cards in fallback');
+          setError('No hay palabras activas en las categorías seleccionadas');
+          return null;
+        }
+
+        randomCard = cardData;
+        console.info('[createSession] Step 1 OK: Card from fallback', { word: randomCard.word });
+      } else {
+        randomCard = rpcData[0];
+        console.info('[createSession] Step 1 OK: Card from RPC', { word: randomCard.word, pack_id: randomCard.pack_id });
       }
+    } catch (e: any) {
+      console.error('[createSession] Step 1 EXCEPTION:', e);
+      setError(`Error inesperado al obtener carta: ${e.message}`);
+      return null;
     }
 
     if (!randomCard) {
+      console.error('[createSession] Step 1 FAIL: randomCard is null after all attempts');
       setError('No hay palabras activas en las categorías seleccionadas');
       return null;
     }
 
-    // 2) Create session with preloaded word
+    // Step 2: Create session with preloaded word
+    console.info('[createSession] Step 2: Creating game_session...');
     const joinCodeValue = mode === 'multi' ? generateJoinCode() : null;
 
     const { data, error: insertError } = await supabase
@@ -272,12 +397,12 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       .single();
 
     if (insertError || !data) {
-      console.error('[createSession] Insert error:', insertError);
-      setError('Error al crear la partida');
+      console.error('[createSession] Step 2 FAIL: Insert error', insertError);
+      setError(`Error al crear la partida: ${insertError?.message || 'Sin datos'}`);
       return null;
     }
 
-    console.info('[createSession] Session created with preloaded word:', {
+    console.info('[createSession] Step 2 OK: Session created', {
       sessionId: data.id,
       word: randomCard.word,
     });
@@ -433,15 +558,103 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     }
   };
 
-  const markPlayerRevealed = async (playerId: string) => {
-    await supabase
-      .from('session_players')
-      .update({ has_revealed: true })
-      .eq('id', playerId);
+  const markPlayerRevealed = async (playerId: string): Promise<boolean> => {
+    console.info('[markPlayerRevealed] Starting', { playerId, sessionId: session?.id });
+
+    try {
+      const { error } = await supabase
+        .from('session_players')
+        .update({ has_revealed: true })
+        .eq('id', playerId);
+
+      if (error) {
+        console.error('[markPlayerRevealed] Error:', error);
+        return false;
+      }
+
+      console.info('[markPlayerRevealed] OK', { playerId });
+
+      // Optimistically update local state
+      setPlayers(prev =>
+        prev.map(p =>
+          p.id === playerId ? { ...p, hasRevealed: true } : p
+        )
+      );
+
+      return true;
+    } catch (e) {
+      console.error('[markPlayerRevealed] Exception:', e);
+      return false;
+    }
   };
 
   const finishDealing = async () => {
     if (!session) return;
+
+    await supabase
+      .from('game_sessions')
+      .update({ status: 'finished' })
+      .eq('id', session.id);
+  };
+
+  // Transition to discussion phase (host only for multiplayer)
+  // UPDATED: Uses Realtime Broadcast instead of DB Update to avoid migration reqs
+  const continueToDiscussion = async (): Promise<boolean> => {
+    if (!session) {
+      console.error('[continueToDiscussion] No session');
+      return false;
+    }
+
+    // Determine first speaker (first in turn order or random)
+    let firstSpeakerId = players[0]?.id;
+    // Try to pick non-topo if possible, or just random
+    const nonTopos = players.filter(p => p.role !== 'topo');
+    if (nonTopos.length > 0) {
+      const randomStart = Math.floor(Math.random() * nonTopos.length);
+      firstSpeakerId = nonTopos[randomStart].id;
+    }
+
+    console.info('[continueToDiscussion] Broadcasting discussion phase...', {
+      sessionId: session.id,
+      firstSpeakerId
+    });
+
+    // Update local state immediately
+    setLocalPhase('discussion' as any);
+    setLocalFirstSpeakerId(firstSpeakerId);
+
+    try {
+      // Send broadcast
+      const channel = supabase.channel(`session-${session.id}`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'phase_change',
+        payload: {
+          phase: 'discussion',
+          firstSpeakerPlayerId: firstSpeakerId
+        }
+      });
+      return true;
+    } catch (e: any) {
+      console.error('[continueToDiscussion] Exception sending broadcast', e);
+      setError(`Error de conexión: ${e.message}`);
+      return false;
+    }
+  };
+
+  // Finish the game
+  const finishGame = async () => {
+    if (!session) return;
+
+    // Broadcast reveal first for immediate UI
+    setLocalPhase('finished');
+
+    const channel = supabase.channel(`session-${session.id}`);
+    channel.send({
+      type: 'broadcast',
+      event: 'phase_change',
+      payload: { phase: 'finished' }
+    });
 
     await supabase
       .from('game_sessions')
@@ -497,8 +710,12 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     startDealing,
     markPlayerRevealed,
     finishDealing,
+    continueToDiscussion,
+    finishGame,
     resetGame,
     refetch: fetchSession,
+    phase: localPhase, // Export local phase
+    firstSpeakerPlayerId: localFirstSpeakerId || session?.firstSpeakerPlayerId // Prefer local if available (since DB might not have it)
   };
 }
 

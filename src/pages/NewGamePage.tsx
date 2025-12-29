@@ -24,8 +24,11 @@ export default function NewGamePage() {
   const [players, setPlayers] = useState<GuestPlayer[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [selectedPackIds, setSelectedPackIds] = useState<string[]>([]);
   const [variant, setVariant] = useState<'classic' | 'double_topo' | 'guess_player'>('classic');
+
+  const CREATION_TIMEOUT_MS = 10000; // 10 seconds
 
   const { user } = useAuth();
   const guestId = useGuestId();
@@ -74,22 +77,47 @@ export default function NewGamePage() {
     }
 
     setCreating(true);
+    setCreateError(null);
+    console.info('[NewGame] create begin', { mode, topoCount, playerCount: players.length });
+
+    // Timeout mechanism: abort if operation takes too long
+    let timeoutTriggered = false;
+    const timeoutId = setTimeout(() => {
+      timeoutTriggered = true;
+      console.error('[NewGame] create TIMEOUT after', CREATION_TIMEOUT_MS, 'ms');
+      setCreating(false);
+      setCreateError('Timeout: La creación tardó demasiado. Pulse Reintentar.');
+      toast.error('Tiempo de espera agotado');
+    }, CREATION_TIMEOUT_MS);
 
     try {
+      console.info('[NewGame] calling createSession');
       const session = await createSession(mode, topoCount, user?.id, !user ? guestId : undefined, selectedPackIds);
 
-      if (!session) {
-        toast.error("Error al crear la partida");
+      // If timeout already triggered, abort
+      if (timeoutTriggered) {
+        console.warn('[NewGame] Timeout already triggered, aborting');
         return;
       }
 
-      // Persistir variant en localStorage
+      if (!session) {
+        console.error('[NewGame] createSession returned null');
+        setCreateError('No se pudo crear la partida. Reintente.');
+        toast.error("Error al crear la partida");
+        return;
+      }
+      console.info('[NewGame] session created', { sessionId: session.id });
+
+      // Store variant in localStorage
       localStorage.setItem(`impostor:variant:${session.id}`, variant);
 
       if (mode === "single") {
+        // Insert players with error checking
         for (let i = 0; i < players.length; i++) {
           const player = players[i];
-          await supabase.from("session_players").insert({
+          console.info('[Supabase] insert session_player', { index: i, displayName: player.displayName });
+
+          const { error: insertError } = await supabase.from("session_players").insert({
             session_id: session.id,
             guest_id: player.id,
             display_name: player.displayName,
@@ -97,10 +125,18 @@ export default function NewGamePage() {
             avatar_key: player.avatarKey,
             turn_order: i,
           });
+
+          if (insertError) {
+            console.error('[Supabase] insert session_player error', { index: i, error: insertError });
+            throw new Error(`Error al añadir jugador ${player.displayName}`);
+          }
+          console.info('[Supabase] insert session_player ok', { index: i });
         }
+
+        console.info('[Router] navigating to game', { sessionId: session.id });
         navigate(`/game/${session.id}`);
       } else {
-        // Add host as first player in multiplayer mode
+        // Multiplayer: Add host as first player
         let hostPlayerData: {
           session_id: string;
           user_id: string | null;
@@ -123,6 +159,7 @@ export default function NewGamePage() {
 
         // Try to fetch profile for authenticated users
         if (user?.id) {
+          console.info('[Supabase] fetching profile for host');
           const { data: profile } = await supabase
             .from('profiles')
             .select('display_name, gender, avatar_key, photo_url')
@@ -140,13 +177,34 @@ export default function NewGamePage() {
           }
         }
 
-        await supabase.from('session_players').insert(hostPlayerData);
+        console.info('[Supabase] insert host player');
+        const { error: hostInsertError } = await supabase.from('session_players').insert(hostPlayerData);
+
+        if (hostInsertError) {
+          console.error('[Supabase] insert host player error', hostInsertError);
+          throw new Error('Error al registrar al anfitrión en la sala');
+        }
+        console.info('[Supabase] insert host player ok');
+
+        console.info('[Router] navigating to lobby', { sessionId: session.id });
         navigate(`/lobby/${session.id}`);
       }
 
       toast.success("¡Partida creada!");
+      console.info('[NewGame] create end - SUCCESS');
+
+    } catch (e: any) {
+      console.error('[NewGame] create error', e);
+      if (!timeoutTriggered) {
+        setCreateError(e.message || 'Error desconocido al crear la partida.');
+        toast.error(e.message || "Error al crear la partida");
+      }
     } finally {
-      setCreating(false);
+      clearTimeout(timeoutId);
+      if (!timeoutTriggered) {
+        setCreating(false);
+      }
+      console.info('[NewGame] create end - finally');
     }
   };
 
@@ -157,9 +215,19 @@ export default function NewGamePage() {
     <PageLayout
       title="Nueva partida"
       footer={
-        <Button onClick={handleCreateGame} disabled={!canCreate || creating} className="w-full h-16 text-xl font-bold">
-          {creating ? "Creando..." : mode === "multi" ? "Crear sala" : "Crear partida"}
-        </Button>
+        <div className="space-y-3">
+          <Button onClick={handleCreateGame} disabled={!canCreate || creating} className="w-full h-16 text-xl font-bold">
+            {creating ? "Creando..." : mode === "multi" ? "Crear sala" : "Crear partida"}
+          </Button>
+          {createError && (
+            <div className="p-4 border-2 border-destructive bg-destructive/10 text-center space-y-2">
+              <p className="text-sm text-destructive font-medium">{createError}</p>
+              <Button onClick={handleCreateGame} variant="outline" size="sm" disabled={creating}>
+                Reintentar
+              </Button>
+            </div>
+          )}
+        </div>
       }
     >
       <div className="max-w-md mx-auto space-y-8">

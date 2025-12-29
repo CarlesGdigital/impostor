@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface PageLayoutProps {
@@ -10,12 +11,12 @@ interface PageLayoutProps {
   footer?: React.ReactNode;
 }
 
-export function PageLayout({ 
-  title, 
-  showBack = true, 
-  children, 
+export function PageLayout({
+  title,
+  showBack = true,
+  children,
   className,
-  footer 
+  footer
 }: PageLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -27,12 +28,14 @@ export function PageLayout({
         <header className="sticky top-0 z-50 bg-background border-b-2 border-foreground">
           <div className="flex items-center gap-4 p-4">
             {showBack && !isHome && (
-              <button
+              <Button
                 onClick={() => navigate(-1)}
-                className="p-2 border-2 border-foreground hover:bg-secondary transition-colors"
+                variant="outline"
+                size="icon"
+                className="shrink-0"
               >
-                <ArrowLeft className="w-6 h-6" />
-              </button>
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
             )}
             {title && (
               <h1 className="text-2xl font-bold truncate">{title}</h1>
@@ -40,7 +43,7 @@ export function PageLayout({
           </div>
         </header>
       )}
-      
+
       <main className={cn('flex-1 p-4', className)}>
         {children}
       </main>

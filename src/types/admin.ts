@@ -1,8 +1,11 @@
+export type MasterCategory = 'general' | 'ninos' | 'benicolet';
+
 export interface Pack {
   id: string;
   name: string;
   slug: string;
   isActive: boolean;
+  masterCategory: MasterCategory;
   createdAt: string;
 }
 
@@ -18,4 +21,14 @@ export interface Card {
   // Joined data
   packName?: string;
   creatorName?: string;
+}
+
+export interface Profile {
+  id: string;
+  displayName: string | null;
+  gender: string | null;
+  avatarKey: string | null;
+  photoUrl: string | null;
+  canSubmitWords: boolean;
+  email?: string;
 }
