@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { GameSession, Player, GameMode, GameStatus } from '@/types/game';
 
 interface UseGameSessionOptions {
@@ -14,6 +15,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
   const [error, setError] = useState<string | null>(null);
   const [waitingForAssignment, setWaitingForAssignment] = useState(false);
   const [dealingRequested, setDealingRequested] = useState(false);
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   // Local phase state for non-persisted phases (e.g. discussion)
   const [localPhase, setLocalPhase] = useState<GameStatus>('lobby');
@@ -96,17 +98,22 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
   }, [fetchSession]);
 
   // Sync local phase with DB status when it changes (only for persisted phases)
+  // FIXED: Removed dependency on localPhase to satisfy linter and avoid stale closures
   useEffect(() => {
     if (session?.status) {
-      // If DB status is finished, always respect it
-      if (session.status === 'finished' || session.status === 'closed') {
-        setLocalPhase(session.status);
-      }
-      // If we are currently in a lobby/dealing/ready state in DB, sync it
-      // UNLESS we are in 'discussion' locally and DB is still sticking to 'dealing'
-      else if (session.status !== 'finished' && localPhase !== 'discussion') {
-        setLocalPhase(session.status);
-      }
+      setLocalPhase(prevPhase => {
+        // If DB status is finished, always respect it
+        if (session.status === 'finished' || session.status === 'closed') {
+          return session.status;
+        }
+        // If we are currently in a lobby/dealing/ready state in DB, sync it
+        // UNLESS we are in 'discussion' locally and DB is still sticking to 'dealing'
+        if (prevPhase === 'discussion') {
+          return prevPhase; // Keep discussion
+        }
+        // Otherwise sync
+        return session.status;
+      });
     }
   }, [session?.status]);
 
@@ -116,8 +123,14 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
 
     console.info('[realtime] Setting up subscription for session:', session.id);
 
+    console.info('[realtime] Setting up subscription for session:', session.id);
+
     const sessionChannel = supabase
-      .channel(`session-${session.id}`)
+      .channel(`session-${session.id}`);
+
+    channelRef.current = sessionChannel;
+
+    sessionChannel
       .on(
         'postgres_changes',
         {
@@ -215,6 +228,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
 
     return () => {
       console.info('[realtime] Unsubscribing from session:', session.id);
+      channelRef.current = null;
       supabase.removeChannel(sessionChannel);
     };
   }, [session?.id]);
@@ -289,80 +303,78 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       return null;
     }
 
-    // Step 1: Get random card via RPC (efficient, server-side random selection)
-    console.info('[createSession] Step 1: Getting random card via RPC...', { packCount: selectedPackIds.length });
+    // Step 1: Get random card (Chunked Search / Optimised Count-Offset Strategy)
+    // We shuffle packs and process in chunks to avoid URL length issues (414) with many packs
+    console.info('[createSession] Step 1: Getting random card (Chunked Strategy)...');
 
     let randomCard: { id: string; word: string; clue: string; pack_id: string } | null = null;
 
     try {
-      // Cast to any because generated types don't include our new RPC function yet
-      const { data: rpcData, error: rpcError } = await (supabase.rpc as any)('get_random_card', {
-        pack_ids: selectedPackIds
-      });
+      // Shuffle pack IDs to ensure randomness across all selected packs
+      const shuffledPacks = [...selectedPackIds].sort(() => Math.random() - 0.5);
 
-      if (rpcError) {
-        // Log error details for debugging
-        console.warn('[createSession] Step 1a: RPC failed', {
-          code: rpcError.code,
-          message: rpcError.message
-        });
+      // Process in chunks of 50
+      const CHUNK_SIZE = 50;
+      let candidatesFound = false;
 
-        // If RPC not available (404/PGRST202), use fallback
-        if (rpcError.code === 'PGRST202' || rpcError.message?.includes('Could not find')) {
-          console.info('[createSession] Step 1b: RPC not available, using fallback (random pack + single card)...');
+      for (let i = 0; i < shuffledPacks.length; i += CHUNK_SIZE) {
+        const chunk = shuffledPacks.slice(i, i + CHUNK_SIZE);
+        console.info(`[createSession] Processing chunk ${Math.floor(i / CHUNK_SIZE) + 1}/${Math.ceil(shuffledPacks.length / CHUNK_SIZE)} (${chunk.length} packs)`);
 
-          // Pick a random pack from selection
-          const randomPackId = selectedPackIds[Math.floor(Math.random() * selectedPackIds.length)];
-          console.info('[createSession] Step 1b: Selected random pack', { randomPackId });
+        // Check active cards in this chunk
+        const { count, error: countError } = await supabase
+          .from('cards')
+          .select('id', { count: 'exact', head: true })
+          .in('pack_id', chunk)
+          .neq('is_active', false);
 
-          // Fetch just 1 card from that pack (small, fast query)
-          const { data: cardData, error: cardError } = await supabase
-            .from('cards')
-            .select('id, word, clue, pack_id')
-            .eq('is_active', true)
-            .eq('pack_id', randomPackId)
-            .limit(1)
-            .single();
+        if (countError) {
+          console.warn('[createSession] Error counting chunk:', countError);
+          continue;
+        }
 
-          if (cardError || !cardData) {
-            console.error('[createSession] Step 1b FAIL: No cards in random pack', { randomPackId, error: cardError });
-            setError('No hay palabras activas en las categorías seleccionadas');
-            return null;
+        if (count && count > 0) {
+          candidatesFound = true;
+          console.info(`[createSession] Found ${count} active candidates in this chunk`);
+
+          // Select from this chunk
+          // Retry loop for robustness
+          let attempts = 0;
+          const MAX_ATTEMPTS = 3;
+
+          while (!randomCard && attempts < MAX_ATTEMPTS) {
+            attempts++;
+            const randomOffset = Math.floor(Math.random() * count);
+
+            const { data, error: fetchError } = await supabase
+              .from('cards')
+              .select('id, word, clue, pack_id')
+              .in('pack_id', chunk)
+              .neq('is_active', false)
+              .range(randomOffset, randomOffset)
+              .maybeSingle();
+
+            if (fetchError) {
+              console.warn(`[createSession] Fetch error at offset ${randomOffset}:`, fetchError);
+              continue;
+            }
+
+            if (data) {
+              randomCard = data;
+              break; // Found one!
+            }
           }
 
-          randomCard = cardData;
-          console.info('[createSession] Step 1b OK: Card from fallback', { word: randomCard.word });
-        } else {
-          // Other RPC error - not recoverable
-          console.error('[createSession] Step 1 FAIL: RPC error', rpcError);
-          setError(`Error al obtener carta: ${rpcError.message}`);
-          return null;
+          if (randomCard) break; // Use the card we found
         }
-      } else if (!rpcData || !Array.isArray(rpcData) || rpcData.length === 0) {
-        console.warn('[createSession] Step 1: RPC returned empty, using fallback...');
-
-        // Pick a random pack from selection
-        const randomPackId = selectedPackIds[Math.floor(Math.random() * selectedPackIds.length)];
-        const { data: cardData, error: cardError } = await supabase
-          .from('cards')
-          .select('id, word, clue, pack_id')
-          .eq('is_active', true)
-          .eq('pack_id', randomPackId)
-          .limit(1)
-          .single();
-
-        if (cardError || !cardData) {
-          console.error('[createSession] Step 1 FAIL: No cards in fallback');
-          setError('No hay palabras activas en las categorías seleccionadas');
-          return null;
-        }
-
-        randomCard = cardData;
-        console.info('[createSession] Step 1 OK: Card from fallback', { word: randomCard.word });
-      } else {
-        randomCard = rpcData[0];
-        console.info('[createSession] Step 1 OK: Card from RPC', { word: randomCard.word, pack_id: randomCard.pack_id });
       }
+
+      if (!candidatesFound) {
+        console.warn('[createSession] No candidates found in ANY chunk');
+        setError('No hay palabras activas en las categorías seleccionadas.');
+        return null;
+      }
+
     } catch (e: any) {
       console.error('[createSession] Step 1 EXCEPTION:', e);
       setError(`Error inesperado al obtener carta: ${e.message}`);
@@ -370,25 +382,30 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     }
 
     if (!randomCard) {
-      console.error('[createSession] Step 1 FAIL: randomCard is null after all attempts');
-      setError('No hay palabras activas en las categorías seleccionadas');
+      console.error('[createSession] Step 1 FAIL: randomCard is null after search');
+      setError('Error al seleccionar una palabra aleatoria. Por favor, inténtalo de nuevo.');
       return null;
     }
 
+    console.info('[createSession] Card selected:', { word: randomCard.word, packId: randomCard.pack_id });
+
     // Step 2: Create session with preloaded word
     console.info('[createSession] Step 2: Creating game_session...');
-    const joinCodeValue = mode === 'multi' ? generateJoinCode() : null;
+
+    // Safety check for mode
+    const finalMode = (mode === 'single' || mode === 'multi') ? mode : 'multi';
+    const joinCodeValue = finalMode === 'multi' ? generateJoinCode() : null;
 
     const { data, error: insertError } = await supabase
       .from('game_sessions')
       .insert({
-        mode,
+        mode: finalMode,
         topo_count: topoCount,
         join_code: joinCodeValue,
         host_user_id: hostUserId || null,
         host_guest_id: hostGuestId || null,
         status: 'lobby',
-        selected_pack_ids: selectedPackIds || null,
+        selected_pack_ids: selectedPackIds || null, // We keep original selection in DB for reference
         card_id: randomCard.id,
         word_text: randomCard.word,
         clue_text: randomCard.clue,
@@ -624,9 +641,12 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     setLocalFirstSpeakerId(firstSpeakerId);
 
     try {
-      // Send broadcast
-      const channel = supabase.channel(`session-${session.id}`);
-      await channel.send({
+      // Send broadcast using existing channel
+      if (!channelRef.current) {
+        throw new Error("No hay conexión en tiempo real. Recarga la página.");
+      }
+
+      await channelRef.current.send({
         type: 'broadcast',
         event: 'phase_change',
         payload: {
@@ -649,12 +669,15 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     // Broadcast reveal first for immediate UI
     setLocalPhase('finished');
 
-    const channel = supabase.channel(`session-${session.id}`);
-    channel.send({
-      type: 'broadcast',
-      event: 'phase_change',
-      payload: { phase: 'finished' }
-    });
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'phase_change',
+        payload: { phase: 'finished' }
+      });
+    } else {
+      console.warn('[finishGame] No active channel to broadcast finish');
+    }
 
     await supabase
       .from('game_sessions')
@@ -676,7 +699,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       .from('game_sessions')
       .update({
         status: 'lobby',
-        word_id: null,
+        card_id: null,
         word_text: null,
         clue_text: null,
       })

@@ -29,6 +29,7 @@ const AdminWordsPage = () => {
 
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastSelectedId, setLastSelectedId] = useState<string | null>(null); // For Shift+Click
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [bulkActioning, setBulkActioning] = useState(false);
   const [affectedSessionCount, setAffectedSessionCount] = useState<number | null>(null);
@@ -111,14 +112,39 @@ const AdminWordsPage = () => {
   };
 
   // === SELECTION HELPERS ===
-  const toggleOne = (id: string) => {
+  const toggleOne = (id: string, event?: React.MouseEvent) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
+
+      // Handle Shift+Click Range Selection
+      if (event?.shiftKey && lastSelectedId && lastSelectedId !== id) {
+        const lastIdx = cards.findIndex(c => c.id === lastSelectedId);
+        const currIdx = cards.findIndex(c => c.id === id);
+
+        if (lastIdx !== -1 && currIdx !== -1) {
+          const start = Math.min(lastIdx, currIdx);
+          const end = Math.max(lastIdx, currIdx);
+
+          const rangeIds = cards.slice(start, end + 1).map(c => c.id);
+          // Determine if we are selecting or deselecting based on target
+          const isSelecting = !prev.has(id);
+
+          rangeIds.forEach(rid => {
+            if (isSelecting) next.add(rid);
+            else next.delete(rid);
+          });
+
+          setLastSelectedId(id);
+          return next;
+        }
+      }
+
       if (next.has(id)) {
         next.delete(id);
       } else {
         next.add(id);
       }
+      setLastSelectedId(id);
       return next;
     });
   };
@@ -181,20 +207,9 @@ const AdminWordsPage = () => {
 
   const handlePreDeleteCheck = async () => {
     if (!hasSelection) return;
-    setCheckingAffected(true);
-    setAffectedSessionCount(null);
-
-    try {
-      const count = await cardService.countAffectedSessions([...selectedIds]);
-      setAffectedSessionCount(count);
-
-      setShowDeleteConfirm(true);
-    } catch (e) {
-      console.error('[PreDelete] Exception:', e);
-      setShowDeleteConfirm(true);
-    } finally {
-      setCheckingAffected(false);
-    }
+    // No need to check affected sessions anymore since we are doing soft delete
+    // Just show confirmation
+    setShowDeleteConfirm(true);
   };
 
   const handleBulkEnable = async () => {
@@ -222,12 +237,68 @@ const AdminWordsPage = () => {
   const handleBulkDelete = async () => {
     if (!hasSelection) return;
 
-    await processInBatches(
-      [...selectedIds],
-      (chunk) => cardService.deleteCards(chunk),
-      'palabras eliminadas definitivamente',
-      'Error al eliminar'
-    );
+    // Convert to unlinking delete (robust hard delete)
+    setBulkActioning(true);
+    try {
+      const ids = [...selectedIds];
+
+      // 1. Unlink historical sessions
+      const { error: unlinkError } = await supabase
+        .from('game_sessions')
+        .update({ card_id: null })
+        .in('card_id', ids);
+
+      if (unlinkError) console.warn('Unlink error (might be fine):', unlinkError);
+
+      await processInBatches(
+        ids,
+        (chunk) => supabase.from('cards').delete().in('id', chunk),
+        'palabras eliminadas (historial desvinculado)',
+        'Error al eliminar'
+      );
+    } catch (e: any) {
+      toast.error(`Error: ${e.message}`);
+      setBulkActioning(false);
+    }
+  };
+
+  const handlePurgeInactive = async () => {
+    if (!confirm('¿Estás seguro de ELIMINAR TODAS las palabras inactivas? Esto desvinculará el historial de partidas pasadas.')) return;
+
+    setBulkActioning(true);
+    try {
+      // 1. Get all inactive IDs
+      const { data: inactiveCards } = await supabase
+        .from('cards')
+        .select('id')
+        .eq('is_active', false);
+
+      const ids = inactiveCards?.map(c => c.id) || [];
+
+      if (ids.length === 0) {
+        toast.info('No hay palabras inactivas.');
+        setBulkActioning(false);
+        return;
+      }
+
+      // 2. Unlink History
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const chunk = ids.slice(i, i + BATCH_SIZE);
+        await supabase.from('game_sessions').update({ card_id: null }).in('card_id', chunk);
+      }
+
+      // 3. Delete
+      await processInBatches(
+        ids,
+        (chunk) => supabase.from('cards').delete().in('id', chunk),
+        'palabras inactivas eliminadas',
+        'Error al purgar'
+      );
+    } catch (e: any) {
+      toast.error('Error al purgar: ' + e.message);
+      setBulkActioning(false);
+    }
   };
 
   const handleAddWord = async () => {
@@ -470,6 +541,32 @@ const AdminWordsPage = () => {
             >
               Limpiar
             </Button>
+            <div className="w-px h-6 bg-border mx-2" />
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handlePurgeInactive}
+              disabled={bulkActioning}
+              className="gap-1 bg-red-900/80 hover:bg-red-900"
+            >
+              <Trash2 className="w-4 h-4" />
+              Purgar Inactivas
+            </Button>
+          </div>
+        )}
+
+        {!hasSelection && (
+          <div className="flex justify-end mb-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handlePurgeInactive}
+              disabled={bulkActioning}
+              className="gap-1 text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="w-4 h-4" />
+              Purgar Inactivas
+            </Button>
           </div>
         )}
 
@@ -483,23 +580,16 @@ const AdminWordsPage = () => {
                 <br />
                 <br />
                 {affectedSessionCount !== null && affectedSessionCount > 0 ? (
-                  <div className="p-3 bg-amber-500/10 border border-amber-500 rounded-md text-amber-600 space-y-1">
+                  <div className="p-3 bg-blue-500/10 border border-blue-500 rounded-md text-blue-600 space-y-1">
                     <p className="font-bold flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4" />
-                      Atención
+                      Nota Informática
                     </p>
                     <p className="text-sm">
-                      Estas cartas se usan en <strong>{affectedSessionCount} partidas históricas</strong>.
-                    </p>
-                    <p className="text-xs opacity-90">
-                      Al eliminar, se mantendrá el histórico (palabra/pista) pero perderán el enlace a la carta original.
+                      Las palabras se marcarán como <strong>inactivas</strong> (archivadas) en lugar de borrarse,
+                      para no afectar a las partidas históricas.
                     </p>
                   </div>
-                ) : (
-                  <span className="text-muted-foreground">
-                    No se han encontrado partidas afectadas (o no se pudo comprobar).
-                  </span>
-                )}
+                ) : null}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -672,6 +762,10 @@ animales, León, Rey de la selva, 1, true"
                       <Checkbox
                         checked={selectedIds.has(card.id)}
                         onCheckedChange={() => toggleOne(card.id)}
+                        onClick={(e) => {
+                          // Allow native shift-click behavior on the checkbox container too
+                          if (e.shiftKey) toggleOne(card.id, e);
+                        }}
                       />
                     </TableCell>
                     <TableCell className="font-medium">{card.packName}</TableCell>

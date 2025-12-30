@@ -89,7 +89,7 @@ const AdminPacksPage = () => {
         name: formName.trim(),
         slug,
         is_active: formActive,
-        master_category: formMasterCategory
+        // master_category: formMasterCategory // Column missing in DB
       });
 
     if (error) {
@@ -139,7 +139,7 @@ const AdminPacksPage = () => {
       .from('packs')
       .update({
         name: formName.trim(),
-        master_category: formMasterCategory
+        // master_category: formMasterCategory
       })
       .eq('id', editingPack.id);
 
@@ -167,9 +167,37 @@ const AdminPacksPage = () => {
 
     setDeleting(true);
     try {
-      console.info('[DeletePack] Deleting cards for pack:', packToDelete.id);
+      console.info('[DeletePack] Starting cascade delete for pack:', packToDelete.id);
 
-      // 1. Delete all cards in this pack
+      // 0. Get all card IDs in this pack to unlink them
+      const { data: packCards } = await supabase
+        .from('cards')
+        .select('id')
+        .eq('pack_id', packToDelete.id);
+
+      const cardIds = packCards?.map(c => c.id) || [];
+
+      // 1. Unlink from game history (Set card_id = NULL in game_sessions)
+      if (cardIds.length > 0) {
+        // Chunking for safety if many cards
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < cardIds.length; i += CHUNK_SIZE) {
+          const chunk = cardIds.slice(i, i + CHUNK_SIZE);
+          await supabase
+            .from('game_sessions')
+            .update({ card_id: null })
+            .in('card_id', chunk);
+        }
+      }
+
+      // Also unlink pack_id from sessions
+      await supabase
+        .from('game_sessions')
+        .update({ pack_id: null })
+        .eq('pack_id', packToDelete.id);
+
+      // 2. Delete all cards in this pack
+      console.info('[DeletePack] Deleting cards...');
       const { error: cardsError } = await supabase
         .from('cards')
         .delete()
@@ -179,7 +207,7 @@ const AdminPacksPage = () => {
         throw new Error(`Error al eliminar palabras: ${cardsError.message}`);
       }
 
-      // 2. Delete the pack itself
+      // 3. Delete the pack itself
       console.info('[DeletePack] Deleting pack:', packToDelete.id);
       const { error: packError } = await supabase
         .from('packs')
@@ -190,7 +218,7 @@ const AdminPacksPage = () => {
         throw new Error(`Error al eliminar la categoría: ${packError.message}`);
       }
 
-      toast.success('Categoría eliminada correctamente');
+      toast.success('Categoría eliminada (historial desvinculado)');
       setPackToDelete(null);
       fetchPacks();
     } catch (e: any) {

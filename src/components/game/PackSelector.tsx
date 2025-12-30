@@ -50,12 +50,11 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
   const loadPacks = async () => {
     setLoading(true);
     try {
-      // Try to fetch with master_category column
-      // We use 'as any' casting to bypass TS check if type gen isn't updated, 
-      // but catch block handles runtime error if column missing
+      // FIX: master_category column does not exist in DB, so we remove it from select
+      // and rely entirely on heuristics
       const { data, error } = await supabase
         .from('packs')
-        .select('id, name, slug, master_category')
+        .select('id, name, slug')
         .eq('is_active', true)
         .order('name');
 
@@ -63,9 +62,8 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
 
       setPacks(data as Pack[]);
     } catch (err) {
-      console.warn('[PackSelector] master_category column potentially missing, falling back to heuristics', err);
-      // Fallback: fetch without column
-      setUseHeuristic(true);
+      console.warn('[PackSelector] Error loading packs', err);
+      // Fallback: fetch without column (redundant if we already removed it, but keeping safe)
       const { data } = await supabase
         .from('packs')
         .select('id, name, slug')
@@ -78,10 +76,11 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
   };
 
   const getPackCategory = (pack: Pack): MasterCategory => {
-    // 1. DB Column (if available and not heuristic fallback)
-    if (!useHeuristic && pack.master_category) {
-      if (pack.master_category === 'adultos' as any) return 'ninos'; // Handle legacy
-      return pack.master_category;
+    // 1. DB Column (fallback if somehow property exists in object but not query)
+    const explicitCat = (pack as any).master_category;
+    if (explicitCat) {
+      if (explicitCat === 'adultos') return 'ninos'; // Handle legacy
+      return explicitCat as MasterCategory;
     }
 
     // 2. Heuristic Fallback
