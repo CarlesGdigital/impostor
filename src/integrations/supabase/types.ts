@@ -240,6 +240,7 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          master_category: string | null
           name: string
           slug: string
         }
@@ -247,6 +248,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          master_category?: string | null
           name: string
           slug: string
         }
@@ -254,6 +256,7 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          master_category?: string | null
           name?: string
           slug?: string
         }

@@ -89,7 +89,7 @@ const AdminPacksPage = () => {
         name: formName.trim(),
         slug,
         is_active: formActive,
-        // master_category: formMasterCategory // Column missing in DB
+        master_category: formMasterCategory
       });
 
     if (error) {
@@ -139,7 +139,7 @@ const AdminPacksPage = () => {
       .from('packs')
       .update({
         name: formName.trim(),
-        // master_category: formMasterCategory
+        master_category: formMasterCategory
       })
       .eq('id', editingPack.id);
 
@@ -284,6 +284,7 @@ const AdminPacksPage = () => {
                     <SelectItem value="general">General</SelectItem>
                     <SelectItem value="ninos">Niños</SelectItem>
                     <SelectItem value="benicolet">Benicolet</SelectItem>
+                    <SelectItem value="picantes">🔥 Picantes (+18)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -323,6 +324,7 @@ const AdminPacksPage = () => {
                     <SelectItem value="general">General</SelectItem>
                     <SelectItem value="ninos">Niños</SelectItem>
                     <SelectItem value="benicolet">Benicolet</SelectItem>
+                    <SelectItem value="picantes">🔥 Picantes (+18)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -388,7 +390,8 @@ const AdminPacksPage = () => {
                     <TableCell className="font-bold">{pack.name}</TableCell>
                     <TableCell>
                       {pack.masterCategory === 'ninos' ? 'Niños' :
-                        pack.masterCategory === 'benicolet' ? 'Benicolet' : 'General'}
+                        pack.masterCategory === 'benicolet' ? 'Benicolet' : 
+                        pack.masterCategory === 'picantes' ? '🔥 Picantes' : 'General'}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{pack.slug}</TableCell>
                     <TableCell>
