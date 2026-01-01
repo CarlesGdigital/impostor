@@ -8,14 +8,16 @@ import { AddPlayerForm } from "@/components/game/AddPlayerForm";
 import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import { PackSelector } from "@/components/game/PackSelector";
 import { SavedRoomSelector } from "@/components/game/SavedRoomSelector";
+import { OfflineIndicator } from "@/components/game/OfflineIndicator";
 import { useAuth } from "@/hooks/useAuth";
 import { useGuestId } from "@/hooks/useGuestId";
 import { useGameSession } from "@/hooks/useGameSession";
 import { useSavedRooms } from "@/hooks/useSavedRooms";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, X, Users, Smartphone, AlertTriangle, Save } from "lucide-react";
+import { Plus, X, Users, Smartphone, AlertTriangle, Save, WifiOff } from "lucide-react";
 import type { GameMode, GuestPlayer } from "@/types/game";
 import type { SavedRoom } from "@/types/savedRoom";
 
@@ -41,6 +43,7 @@ export default function NewGamePage() {
   const guestId = useGuestId();
   const { createSession } = useGameSession();
   const { createRoom, updateRoom, getRoomById } = useSavedRooms();
+  const { isOnline } = useOnlineStatus();
   const navigate = useNavigate();
 
   const minPlayers = 3;
@@ -176,25 +179,47 @@ export default function NewGamePage() {
       }
 
       if (mode === "single") {
-        // Insert players with error checking
-        for (let i = 0; i < players.length; i++) {
-          const player = players[i];
-          console.info('[Supabase] insert session_player', { index: i, displayName: player.displayName });
-
-          const { error: insertError } = await supabase.from("session_players").insert({
-            session_id: session.id,
-            guest_id: player.id,
-            display_name: player.displayName,
+        // Check if offline session (id starts with "offline-")
+        const isOfflineSession = session.id.startsWith('offline-');
+        
+        if (isOfflineSession) {
+          // Offline mode: Store players in localStorage instead of database
+          console.info('[NewGame] OFFLINE: Storing players locally');
+          const offlinePlayers = players.map((player, i) => ({
+            id: `offline-player-${i}`,
+            sessionId: session.id,
+            userId: null,
+            guestId: player.id,
+            displayName: player.displayName,
             gender: player.gender,
-            avatar_key: player.avatarKey,
-            turn_order: i,
-          });
+            avatarKey: player.avatarKey,
+            photoUrl: null,
+            role: null,
+            hasRevealed: false,
+            turnOrder: i,
+          }));
+          localStorage.setItem(`impostor:offline_players:${session.id}`, JSON.stringify(offlinePlayers));
+        } else {
+          // Online mode: Insert players into database
+          for (let i = 0; i < players.length; i++) {
+            const player = players[i];
+            console.info('[Supabase] insert session_player', { index: i, displayName: player.displayName });
 
-          if (insertError) {
-            console.error('[Supabase] insert session_player error', { index: i, error: insertError });
-            throw new Error(`Error al añadir jugador ${player.displayName}`);
+            const { error: insertError } = await supabase.from("session_players").insert({
+              session_id: session.id,
+              guest_id: player.id,
+              display_name: player.displayName,
+              gender: player.gender,
+              avatar_key: player.avatarKey,
+              turn_order: i,
+            });
+
+            if (insertError) {
+              console.error('[Supabase] insert session_player error', { index: i, error: insertError });
+              throw new Error(`Error al añadir jugador ${player.displayName}`);
+            }
+            console.info('[Supabase] insert session_player ok', { index: i });
           }
-          console.info('[Supabase] insert session_player ok', { index: i });
         }
 
         console.info('[Router] navigating to game', { sessionId: session.id });
@@ -295,6 +320,21 @@ export default function NewGamePage() {
       }
     >
       <div className="max-w-md mx-auto space-y-8">
+        {/* Offline indicator */}
+        <div className="flex justify-center">
+          <OfflineIndicator />
+        </div>
+
+        {/* Offline warning for multi mode */}
+        {!isOnline && mode === "multi" && (
+          <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm">
+            <WifiOff className="h-4 w-4 text-destructive shrink-0" />
+            <span className="text-muted-foreground">
+              El modo multimóvil no está disponible sin conexión. Usa el modo "Un móvil".
+            </span>
+          </div>
+        )}
+
         <div className="space-y-3">
           <Label className="text-lg font-bold">Modo de juego</Label>
           <div className="grid grid-cols-2 gap-3">
@@ -310,9 +350,11 @@ export default function NewGamePage() {
             </button>
             <button
               onClick={() => setMode("multi")}
+              disabled={!isOnline}
               className={cn(
                 "flex flex-col items-center gap-2 p-4 border-2 border-foreground text-center font-bold transition-colors",
                 mode === "multi" ? "bg-foreground text-background" : "bg-card hover:bg-secondary",
+                !isOnline && "opacity-50 cursor-not-allowed"
               )}
             >
               <Users className="w-6 h-6" />
