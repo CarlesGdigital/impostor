@@ -4,6 +4,7 @@ import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { CardReveal } from "@/components/game/CardReveal";
 import { PlayerAvatar } from "@/components/game/PlayerAvatar";
+import { PlayAgainButton } from "@/components/game/PlayAgainButton";
 import { useGameSession } from "@/hooks/useGameSession";
 
 export default function GamePage() {
@@ -108,8 +109,13 @@ export default function GamePage() {
             <p className="text-2xl">{session.clueText || "—"}</p>
           </div>
           <div className="space-y-3 pt-4">
-            <Button onClick={() => navigate("/")} className="w-full h-14 text-lg font-bold">
-              Nueva partida
+            <PlayAgainButton
+              sessionId={sessionId || ''}
+              players={players}
+              mode="single"
+            />
+            <Button onClick={() => navigate("/")} variant="outline" className="w-full h-14 text-lg font-bold border-2">
+              Volver al inicio
             </Button>
           </div>
         </div>
