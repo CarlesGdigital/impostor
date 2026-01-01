@@ -14,7 +14,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Upload, Loader2, CheckCircle, XCircle, Trash2, Check, X, AlertTriangle } from 'lucide-react';
+import { Plus, Upload, Loader2, CheckCircle, XCircle, Trash2, Check, X, AlertTriangle, FolderSync } from 'lucide-react';
+import type { MasterCategory } from '@/types/admin';
 import type { Pack, Card } from '@/types/admin';
 import { cardService } from '@/services/cardService';
 
@@ -34,6 +35,10 @@ const AdminWordsPage = () => {
   const [bulkActioning, setBulkActioning] = useState(false);
   const [affectedSessionCount, setAffectedSessionCount] = useState<number | null>(null);
   const [checkingAffected, setCheckingAffected] = useState(false);
+  
+  // Category change state
+  const [showCategoryDialog, setShowCategoryDialog] = useState(false);
+  const [targetCategory, setTargetCategory] = useState<MasterCategory | ''>('');
 
   // Form state
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -301,6 +306,84 @@ const AdminWordsPage = () => {
     }
   };
 
+  // === BULK CATEGORY CHANGE ===
+  const handleBulkCategoryChange = async () => {
+    if (!hasSelection || !targetCategory) return;
+
+    setBulkActioning(true);
+    const ids = [...selectedIds];
+    let successCount = 0;
+    let failedCount = 0;
+
+    try {
+      // Find or create the pack for this master category
+      const packName = targetCategory === 'general' ? 'General' 
+        : targetCategory === 'benicolet' ? 'Benicolet' 
+        : 'Picantes';
+      const packSlug = targetCategory;
+
+      let { data: pack } = await supabase
+        .from('packs')
+        .select('id')
+        .eq('master_category', targetCategory)
+        .limit(1)
+        .maybeSingle();
+
+      if (!pack) {
+        // Create the pack for this master category
+        const { data: newPack, error: packError } = await supabase
+          .from('packs')
+          .insert({ 
+            name: packName, 
+            slug: packSlug, 
+            master_category: targetCategory,
+            is_active: true 
+          })
+          .select()
+          .single();
+
+        if (packError) {
+          toast.error('Error al crear la categoría destino');
+          setBulkActioning(false);
+          return;
+        }
+        pack = newPack;
+      }
+
+      // Process in batches
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+        const chunk = ids.slice(i, i + BATCH_SIZE);
+        const { error } = await supabase
+          .from('cards')
+          .update({ pack_id: pack.id })
+          .in('id', chunk);
+
+        if (error) {
+          console.error('[BulkCategoryChange] Error:', error);
+          failedCount += chunk.length;
+        } else {
+          successCount += chunk.length;
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`${successCount} palabras movidas a "${packName}"${failedCount > 0 ? ` (${failedCount} fallidas)` : ''}`);
+        await fetchData();
+        clearSelection();
+      } else if (failedCount > 0) {
+        toast.error(`Error al mover ${failedCount} palabras`);
+      }
+    } catch (e: any) {
+      console.error('[BulkCategoryChange] Unexpected error:', e);
+      toast.error(`Error inesperado: ${e.message}`);
+    } finally {
+      setBulkActioning(false);
+      setShowCategoryDialog(false);
+      setTargetCategory('');
+    }
+  };
+
   const handleAddWord = async () => {
     if (!formWord.trim() || !formClue.trim()) {
       toast.error('Palabra y pista son obligatorias');
@@ -525,6 +608,16 @@ const AdminWordsPage = () => {
             </Button>
             <Button
               size="sm"
+              variant="secondary"
+              onClick={() => setShowCategoryDialog(true)}
+              disabled={bulkActioning}
+              className="gap-1"
+            >
+              <FolderSync className="w-4 h-4" />
+              Cambiar categoría
+            </Button>
+            <Button
+              size="sm"
               variant="destructive"
               onClick={handlePreDeleteCheck}
               disabled={bulkActioning || checkingAffected}
@@ -604,6 +697,49 @@ const AdminWordsPage = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Category Change Dialog */}
+        <Dialog open={showCategoryDialog} onOpenChange={(open) => {
+          setShowCategoryDialog(open);
+          if (!open) setTargetCategory('');
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Cambiar categoría de {selectedIds.size} palabras</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Selecciona la categoría destino para las palabras seleccionadas.
+              </p>
+              <Select value={targetCategory} onValueChange={(v) => setTargetCategory(v as MasterCategory)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="general">🎯 General</SelectItem>
+                  <SelectItem value="benicolet">🎭 Benicolet</SelectItem>
+                  <SelectItem value="picantes">🔥 Picantes (+18)</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex gap-2 justify-end">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setShowCategoryDialog(false)}
+                  disabled={bulkActioning}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={handleBulkCategoryChange} 
+                  disabled={bulkActioning || !targetCategory}
+                >
+                  {bulkActioning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Aplicar cambio
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Actions */}
         <div className="flex gap-3">
