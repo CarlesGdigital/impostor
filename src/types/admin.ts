@@ -1,4 +1,4 @@
-export type MasterCategory = 'general' | 'ninos' | 'benicolet';
+export type MasterCategory = 'general' | 'ninos' | 'benicolet' | 'picantes';
 
 export interface Pack {
   id: string;
