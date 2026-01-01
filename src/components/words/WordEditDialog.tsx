@@ -114,7 +114,7 @@ export function WordEditDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>Pista *</Label>
+            <Label>Pista (opcional)</Label>
             <Input
               value={clue}
               onChange={(e) => setClue(e.target.value)}
@@ -169,7 +169,7 @@ export function WordEditDialog({
             <Switch checked={isActive} onCheckedChange={setIsActive} />
             <Label>Activa</Label>
           </div>
-          <Button onClick={handleSave} disabled={saving || !word.trim() || !clue.trim()} className="w-full">
+          <Button onClick={handleSave} disabled={saving || !word.trim()} className="w-full">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Guardar'}
           </Button>
         </div>

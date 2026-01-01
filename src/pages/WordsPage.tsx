@@ -193,8 +193,8 @@ export default function WordsPage() {
     difficulty?: number | null;
     isActive: boolean;
   }): Promise<boolean> => {
-    if (!data.word || !data.clue) {
-      toast.error('Palabra y pista son obligatorias');
+    if (!data.word.trim()) {
+      toast.error('La palabra es obligatoria');
       return false;
     }
 
@@ -220,8 +220,8 @@ export default function WordsPage() {
           .from('cards')
           .update({
             pack_id: packId,
-            word: data.word,
-            clue: data.clue,
+            word: data.word.trim(),
+            clue: data.clue.trim() || null,
             difficulty: data.difficulty,
             is_active: data.isActive,
           })
@@ -254,8 +254,8 @@ export default function WordsPage() {
           .from('cards')
           .insert({
             pack_id: packId,
-            word: data.word,
-            clue: data.clue,
+            word: data.word.trim(),
+            clue: data.clue.trim() || null,
             difficulty: data.difficulty,
             is_active: data.isActive,
             created_by: user!.id,
