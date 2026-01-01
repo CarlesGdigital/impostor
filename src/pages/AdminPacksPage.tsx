@@ -65,8 +65,10 @@ const AdminPacksPage = () => {
       name: p.name,
       slug: p.slug,
       isActive: p.is_active,
-      // Map legacy/null values
-      masterCategory: (p.master_category === 'adultos' ? 'ninos' : (p.master_category || 'general')) as MasterCategory,
+      // Map legacy values to the 3 valid categories
+      masterCategory: (['general', 'benicolet', 'picantes'].includes(p.master_category) 
+        ? p.master_category 
+        : 'general') as MasterCategory,
       createdAt: p.created_at,
     })));
 
@@ -282,7 +284,6 @@ const AdminPacksPage = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="general">General</SelectItem>
-                    <SelectItem value="ninos">Niños</SelectItem>
                     <SelectItem value="benicolet">Benicolet</SelectItem>
                     <SelectItem value="picantes">🔥 Picantes (+18)</SelectItem>
                   </SelectContent>
@@ -322,7 +323,6 @@ const AdminPacksPage = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="general">General</SelectItem>
-                    <SelectItem value="ninos">Niños</SelectItem>
                     <SelectItem value="benicolet">Benicolet</SelectItem>
                     <SelectItem value="picantes">🔥 Picantes (+18)</SelectItem>
                   </SelectContent>
@@ -389,8 +389,7 @@ const AdminPacksPage = () => {
                   <TableRow key={pack.id}>
                     <TableCell className="font-bold">{pack.name}</TableCell>
                     <TableCell>
-                      {pack.masterCategory === 'ninos' ? 'Niños' :
-                        pack.masterCategory === 'benicolet' ? 'Benicolet' : 
+                      {pack.masterCategory === 'benicolet' ? 'Benicolet' : 
                         pack.masterCategory === 'picantes' ? '🔥 Picantes' : 'General'}
                     </TableCell>
                     <TableCell className="text-muted-foreground">{pack.slug}</TableCell>

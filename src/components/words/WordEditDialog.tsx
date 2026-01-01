@@ -5,20 +5,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
-
-interface Pack {
-  id: string;
-  name: string;
-}
+import { Loader2, Globe, MapPin, Flame } from 'lucide-react';
+import type { MasterCategory } from '@/types/admin';
 
 interface WordEditDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  packs: Pack[];
   editingCard?: {
     id: string;
-    packId: string;
+    masterCategory: MasterCategory;
     word: string;
     clue: string;
     difficulty?: number | null;
@@ -26,8 +21,7 @@ interface WordEditDialogProps {
   } | null;
   onSave: (data: {
     id?: string;
-    packId: string;
-    newPackName?: string;
+    masterCategory: MasterCategory;
     word: string;
     clue: string;
     difficulty?: number | null;
@@ -38,14 +32,12 @@ interface WordEditDialogProps {
 export function WordEditDialog({ 
   open, 
   onOpenChange, 
-  packs, 
   editingCard, 
   onSave 
 }: WordEditDialogProps) {
   const [word, setWord] = useState('');
   const [clue, setClue] = useState('');
-  const [packId, setPackId] = useState('');
-  const [newPackName, setNewPackName] = useState('');
+  const [masterCategory, setMasterCategory] = useState<MasterCategory>('general');
   const [difficulty, setDifficulty] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -54,10 +46,9 @@ export function WordEditDialog({
     if (editingCard) {
       setWord(editingCard.word);
       setClue(editingCard.clue);
-      setPackId(editingCard.packId);
+      setMasterCategory(editingCard.masterCategory);
       setDifficulty(editingCard.difficulty?.toString() || '');
       setIsActive(editingCard.isActive);
-      setNewPackName('');
     } else {
       resetForm();
     }
@@ -66,8 +57,7 @@ export function WordEditDialog({
   const resetForm = () => {
     setWord('');
     setClue('');
-    setPackId('');
-    setNewPackName('');
+    setMasterCategory('general');
     setDifficulty('');
     setIsActive(true);
   };
@@ -76,8 +66,7 @@ export function WordEditDialog({
     setSaving(true);
     const success = await onSave({
       id: editingCard?.id,
-      packId,
-      newPackName: newPackName.trim() || undefined,
+      masterCategory,
       word: word.trim(),
       clue: clue.trim(),
       difficulty: difficulty ? parseInt(difficulty) : null,
@@ -92,6 +81,22 @@ export function WordEditDialog({
   };
 
   const isEdit = !!editingCard;
+
+  const getCategoryIcon = (cat: MasterCategory) => {
+    switch (cat) {
+      case 'benicolet': return <MapPin className="w-4 h-4" />;
+      case 'picantes': return <Flame className="w-4 h-4" />;
+      default: return <Globe className="w-4 h-4" />;
+    }
+  };
+
+  const getCategoryLabel = (cat: MasterCategory) => {
+    switch (cat) {
+      case 'benicolet': return 'Benicolet';
+      case 'picantes': return '🔥 Picantes (+18)';
+      default: return 'General';
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -117,30 +122,38 @@ export function WordEditDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>Categoría</Label>
-            <Select value={packId} onValueChange={(v) => { setPackId(v); setNewPackName(''); }}>
+            <Label>Categoría *</Label>
+            <Select value={masterCategory} onValueChange={(v) => setMasterCategory(v as MasterCategory)}>
               <SelectTrigger>
-                <SelectValue placeholder="Seleccionar categoría" />
+                <SelectValue>
+                  <span className="flex items-center gap-2">
+                    {getCategoryIcon(masterCategory)}
+                    {getCategoryLabel(masterCategory)}
+                  </span>
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {packs.map((pack) => (
-                  <SelectItem key={pack.id} value={pack.id}>
-                    {pack.name}
-                  </SelectItem>
-                ))}
+                <SelectItem value="general">
+                  <span className="flex items-center gap-2">
+                    <Globe className="w-4 h-4" />
+                    General
+                  </span>
+                </SelectItem>
+                <SelectItem value="benicolet">
+                  <span className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4" />
+                    Benicolet
+                  </span>
+                </SelectItem>
+                <SelectItem value="picantes">
+                  <span className="flex items-center gap-2">
+                    <Flame className="w-4 h-4" />
+                    🔥 Picantes (+18)
+                  </span>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
-          {!isEdit && (
-            <div className="space-y-2">
-              <Label>O crear nueva categoría</Label>
-              <Input
-                value={newPackName}
-                onChange={(e) => { setNewPackName(e.target.value); setPackId(''); }}
-                placeholder="Nombre de la nueva categoría"
-              />
-            </div>
-          )}
           <div className="space-y-2">
             <Label>Dificultad (opcional)</Label>
             <Input
@@ -156,7 +169,7 @@ export function WordEditDialog({
             <Switch checked={isActive} onCheckedChange={setIsActive} />
             <Label>Activa</Label>
           </div>
-          <Button onClick={handleSave} disabled={saving} className="w-full">
+          <Button onClick={handleSave} disabled={saving || !word.trim() || !clue.trim()} className="w-full">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Guardar'}
           </Button>
         </div>
