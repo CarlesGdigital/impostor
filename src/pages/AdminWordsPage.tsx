@@ -45,8 +45,7 @@ const AdminWordsPage = () => {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [formWord, setFormWord] = useState('');
   const [formClue, setFormClue] = useState('');
-  const [formPackId, setFormPackId] = useState('');
-  const [formNewPack, setFormNewPack] = useState('');
+  const [formMasterCategory, setFormMasterCategory] = useState<MasterCategory>('general');
   const [formDifficulty, setFormDifficulty] = useState('');
   const [formActive, setFormActive] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -390,37 +389,31 @@ const AdminWordsPage = () => {
       return;
     }
 
-    if (!formPackId && !formNewPack.trim()) {
-      toast.error('Selecciona o crea una categoría');
-      return;
-    }
-
     setSaving(true);
 
     try {
-      let packId = formPackId;
+      // Get pack for this master category
+      const { data: pack, error: packError } = await supabase
+        .from('packs')
+        .select('id')
+        .eq('master_category', formMasterCategory)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
 
-      // Create new pack if needed
-      if (formNewPack.trim()) {
-        const slug = formNewPack.trim().toLowerCase().replace(/\s+/g, '-');
-        const { data: newPack, error: packError } = await supabase
-          .from('packs')
-          .insert({ name: formNewPack.trim(), slug })
-          .select()
-          .single();
-
-        if (packError) {
-          toast.error('Error al crear la categoría');
-          setSaving(false);
-          return;
-        }
-        packId = newPack.id;
+      if (packError || !pack) {
+        const categoryName = formMasterCategory === 'general' ? 'General' 
+          : formMasterCategory === 'benicolet' ? 'Benicolet' 
+          : 'Picantes';
+        toast.error(`No existe la categoría "${categoryName}" en el sistema. Contacta con un administrador.`);
+        setSaving(false);
+        return;
       }
 
       const { error } = await supabase
         .from('cards')
         .insert({
-          pack_id: packId,
+          pack_id: pack.id,
           word: formWord.trim(),
           clue: formClue.trim() || null,
           difficulty: formDifficulty ? parseInt(formDifficulty) : null,
@@ -539,8 +532,7 @@ const AdminWordsPage = () => {
   const resetForm = () => {
     setFormWord('');
     setFormClue('');
-    setFormPackId('');
-    setFormNewPack('');
+    setFormMasterCategory('general');
     setFormDifficulty('');
     setFormActive(true);
   };
@@ -764,7 +756,7 @@ const AdminWordsPage = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Pista *</Label>
+                  <Label>Pista (opcional)</Label>
                   <Input
                     value={formClue}
                     onChange={(e) => setFormClue(e.target.value)}
@@ -772,27 +764,17 @@ const AdminWordsPage = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Categoría</Label>
-                  <Select value={formPackId} onValueChange={(v) => { setFormPackId(v); setFormNewPack(''); }}>
+                  <Label>Categoría *</Label>
+                  <Select value={formMasterCategory} onValueChange={(v) => setFormMasterCategory(v as MasterCategory)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Seleccionar categoría" />
                     </SelectTrigger>
                     <SelectContent>
-                      {packs.map((pack) => (
-                        <SelectItem key={pack.id} value={pack.id}>
-                          {pack.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="general">🎯 General</SelectItem>
+                      <SelectItem value="benicolet">🎭 Benicolet</SelectItem>
+                      <SelectItem value="picantes">🔥 Picantes (+18)</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>O crear nueva categoría</Label>
-                  <Input
-                    value={formNewPack}
-                    onChange={(e) => { setFormNewPack(e.target.value); setFormPackId(''); }}
-                    placeholder="Nombre de la nueva categoría"
-                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Dificultad (opcional)</Label>

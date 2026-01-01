@@ -148,12 +148,9 @@ export default function WordsPage() {
     setLoading(false);
   };
 
-  // Get or create pack for master category
-  const getOrCreatePackForCategory = async (category: MasterCategory): Promise<string | null> => {
-    const packInfo = MASTER_CATEGORY_PACKS[category];
-    
-    // Try to find existing pack with this master_category
-    const { data: existingPack } = await supabase
+  // Get pack ID for master category - packs must already exist in DB
+  const getPackForCategory = async (category: MasterCategory): Promise<string | null> => {
+    const { data: pack, error } = await supabase
       .from('packs')
       .select('id')
       .eq('master_category', category)
@@ -161,28 +158,18 @@ export default function WordsPage() {
       .limit(1)
       .maybeSingle();
 
-    if (existingPack) {
-      return existingPack.id;
-    }
-
-    // Create new pack for this category
-    const { data: newPack, error } = await supabase
-      .from('packs')
-      .insert({
-        name: packInfo.name,
-        slug: packInfo.slug,
-        master_category: category,
-        is_active: true
-      })
-      .select('id')
-      .single();
-
     if (error) {
-      console.error('Error creating pack:', error);
+      console.error('Error fetching pack:', error);
+      toast.error(`Error al buscar la categoría "${MASTER_CATEGORY_PACKS[category].name}"`);
       return null;
     }
 
-    return newPack.id;
+    if (!pack) {
+      toast.error(`No existe la categoría "${MASTER_CATEGORY_PACKS[category].name}" en el sistema. Contacta con un administrador.`);
+      return null;
+    }
+
+    return pack.id;
   };
 
   const handleSaveWord = async (data: {
@@ -199,11 +186,11 @@ export default function WordsPage() {
     }
 
     try {
-      // Get or create pack for this master category
-      const packId = await getOrCreatePackForCategory(data.masterCategory);
+      // Get pack for this master category
+      const packId = await getPackForCategory(data.masterCategory);
       
       if (!packId) {
-        toast.error('Error al obtener la categoría');
+        // Error already shown by getPackForCategory
         return false;
       }
 
