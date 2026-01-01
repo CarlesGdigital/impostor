@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import type { GameSession, Player, GameMode, GameStatus } from '@/types/game';
+import { useOfflineCards } from './useOfflineCards';
+import { useOnlineStatus } from './useOnlineStatus';
+import { v4 as uuidv4 } from 'uuid';
 
 interface UseGameSessionOptions {
   sessionId?: string;
@@ -16,6 +19,10 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
   const [waitingForAssignment, setWaitingForAssignment] = useState(false);
   const [dealingRequested, setDealingRequested] = useState(false);
   const channelRef = useRef<RealtimeChannel | null>(null);
+
+  // Offline support
+  const { isOnline } = useOnlineStatus();
+  const { getRandomOfflineCard, hasOfflineData } = useOfflineCards();
 
   // Local phase state for non-persisted phases (e.g. discussion)
   const [localPhase, setLocalPhase] = useState<GameStatus>('lobby');
@@ -61,6 +68,27 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     setError(null);
 
     try {
+      // Check if this is an offline session
+      if (sessionId?.startsWith('offline-')) {
+        console.info('[fetchSession] Loading offline session:', sessionId);
+        const storedSession = localStorage.getItem(`impostor:offline_session:${sessionId}`);
+        const storedPlayers = localStorage.getItem(`impostor:offline_players:${sessionId}`);
+        
+        if (storedSession) {
+          setSession(JSON.parse(storedSession));
+          if (storedPlayers) {
+            setPlayers(JSON.parse(storedPlayers));
+          }
+          setLoading(false);
+          return;
+        } else {
+          setError('Sesión offline no encontrada');
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Online mode: fetch from database
       let query = supabase.from('game_sessions').select('*');
 
       if (sessionId) {
@@ -302,7 +330,8 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       mode, 
       topoCount, 
       packCount: selectedPackIds?.length || 0,
-      excludeCardId: excludeCardId || 'none'
+      excludeCardId: excludeCardId || 'none',
+      isOnline
     });
 
     // Validate pack selection
@@ -312,6 +341,59 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       return null;
     }
 
+    // OFFLINE MODE: Create local session without database
+    if (!isOnline) {
+      console.info('[createSession] 📴 OFFLINE MODE: Creating local session...');
+      
+      if (!hasOfflineData()) {
+        console.error('[createSession] OFFLINE FAIL: No offline data available');
+        setError('Sin conexión y sin datos offline. Sincroniza palabras cuando tengas conexión.');
+        return null;
+      }
+
+      const offlineCard = getRandomOfflineCard(selectedPackIds, excludeCardId);
+      
+      if (!offlineCard) {
+        console.error('[createSession] OFFLINE FAIL: No cards available for selected packs');
+        setError('No hay palabras disponibles para las categorías seleccionadas (offline).');
+        return null;
+      }
+
+      console.info('[createSession] 📴 OFFLINE Card selected:', { 
+        word: offlineCard.word, 
+        cardId: offlineCard.id 
+      });
+
+      // Create local session object (not persisted to database)
+      const offlineSession: GameSession = {
+        id: `offline-${uuidv4()}`,
+        hostUserId: hostUserId || null,
+        hostGuestId: hostGuestId || null,
+        mode: mode,
+        joinCode: null, // No join code for offline
+        status: 'lobby',
+        topoCount,
+        maxPlayers: null,
+        packId: null,
+        cardId: offlineCard.id,
+        wordText: offlineCard.word,
+        clueText: offlineCard.clue,
+        selectedPackIds,
+        firstSpeakerPlayerId: null,
+        deceivedTopoPlayerId: null,
+        deceivedWordText: null,
+        deceivedClueText: null,
+        createdAt: new Date().toISOString(),
+      };
+
+      // Store offline session in localStorage for game page to retrieve
+      localStorage.setItem(`impostor:offline_session:${offlineSession.id}`, JSON.stringify(offlineSession));
+
+      setSession(offlineSession);
+      return offlineSession;
+    }
+
+    // ONLINE MODE: Original database flow
     // Step 1: Get random card (Chunked Search / Optimised Count-Offset Strategy)
     // We shuffle packs and process in chunks to avoid URL length issues (414) with many packs
     console.info('[createSession] Step 1: Getting random card (Chunked Strategy)...');
@@ -539,7 +621,8 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     try {
       // Read variant from localStorage
       const variant = localStorage.getItem(`impostor:variant:${session.id}`) || 'classic';
-      console.info('[startDealing] Variant:', variant);
+      const isOfflineSession = session.id.startsWith('offline-');
+      console.info('[startDealing] Variant:', variant, 'Offline:', isOfflineSession);
 
       // TRUE RANDOM: Fisher-Yates shuffle for unbiased randomization
       const shuffleArray = <T,>(array: T[]): T[] => {
@@ -622,35 +705,50 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       const shuffledForTurnOrder = shuffleArray(playerIds);
 
       // Update players with roles and randomized turn order
+      const updatedPlayersLocal: Player[] = [];
       for (let i = 0; i < players.length; i++) {
         const playerId = shuffledForTurnOrder[i];
         const player = players.find(p => p.id === playerId)!;
         
         let role: string;
         if (variant === 'double_topo' && playerId === deceivedTopoId) {
-          role = 'deceived_topo'; // Stored as deceived_topo but UI shows as crew
+          role = 'deceived_topo';
         } else if (topoIds.includes(playerId)) {
           role = 'topo';
         } else {
           role = 'crew';
         }
 
-        await supabase
-          .from('session_players')
-          .update({ role, turn_order: i, has_revealed: false })
-          .eq('id', playerId);
+        if (isOfflineSession) {
+          // Offline: update local player object
+          updatedPlayersLocal.push({ ...player, role: role as any, turnOrder: i, hasRevealed: false });
+        } else {
+          // Online: update database
+          await supabase
+            .from('session_players')
+            .update({ role, turn_order: i, has_revealed: false })
+            .eq('id', playerId);
+        }
       }
 
       // Refetch players to get updated roles with new turn order
-      const { data: updatedPlayersData } = await supabase
-        .from('session_players')
-        .select('*')
-        .eq('session_id', session.id)
-        .order('turn_order', { ascending: true });
+      if (isOfflineSession) {
+        // Offline: sort and set local players
+        updatedPlayersLocal.sort((a, b) => (a.turnOrder || 0) - (b.turnOrder || 0));
+        setPlayers(updatedPlayersLocal);
+        localStorage.setItem(`impostor:offline_players:${session.id}`, JSON.stringify(updatedPlayersLocal));
+        console.info('[startDealing] OFFLINE Players updated:', updatedPlayersLocal.length);
+      } else {
+        const { data: updatedPlayersData } = await supabase
+          .from('session_players')
+          .select('*')
+          .eq('session_id', session.id)
+          .order('turn_order', { ascending: true });
 
-      if (updatedPlayersData) {
-        setPlayers(updatedPlayersData.map(mapPlayer));
-        console.info('[startDealing] Players refetched with roles:', updatedPlayersData.length);
+        if (updatedPlayersData) {
+          setPlayers(updatedPlayersData.map(mapPlayer));
+          console.info('[startDealing] Players refetched with roles:', updatedPlayersData.length);
+        }
       }
 
       // TRUE RANDOM first speaker: pick from all players randomly (not by turn_order)
@@ -660,15 +758,16 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       // For guess_player: pick target and update word
       let wordTextOverride = null;
       let clueTextOverride = null;
+      const currentPlayers = isOfflineSession ? updatedPlayersLocal : players;
 
-      if (variant === 'guess_player' && updatedPlayersData) {
-        const nonTopoPlayers = updatedPlayersData.filter(p => p.role !== 'topo');
+      if (variant === 'guess_player' && currentPlayers.length > 0) {
+        const nonTopoPlayers = currentPlayers.filter(p => p.role !== 'topo');
         if (nonTopoPlayers.length > 0) {
           const targetPlayer = nonTopoPlayers[Math.floor(Math.random() * nonTopoPlayers.length)];
           localStorage.setItem(`impostor:targetPlayerId:${session.id}`, targetPlayer.id);
-          wordTextOverride = targetPlayer.display_name;
+          wordTextOverride = targetPlayer.displayName;
           clueTextOverride = "Describe a esta persona sin decir su nombre.";
-          console.info('[startDealing] Target player for guess_player:', targetPlayer.display_name);
+          console.info('[startDealing] Target player for guess_player:', targetPlayer.displayName);
         }
       }
 
