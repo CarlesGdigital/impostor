@@ -113,7 +113,7 @@ export type Database = {
       }
       cards: {
         Row: {
-          clue: string
+          clue: string | null
           created_at: string
           created_by: string
           difficulty: number | null
@@ -123,7 +123,7 @@ export type Database = {
           word: string
         }
         Insert: {
-          clue: string
+          clue?: string | null
           created_at?: string
           created_by: string
           difficulty?: number | null
@@ -133,7 +133,7 @@ export type Database = {
           word: string
         }
         Update: {
-          clue?: string
+          clue?: string | null
           created_at?: string
           created_by?: string
           difficulty?: number | null

@@ -385,8 +385,8 @@ const AdminWordsPage = () => {
   };
 
   const handleAddWord = async () => {
-    if (!formWord.trim() || !formClue.trim()) {
-      toast.error('Palabra y pista son obligatorias');
+    if (!formWord.trim()) {
+      toast.error('La palabra es obligatoria');
       return;
     }
 
@@ -422,7 +422,7 @@ const AdminWordsPage = () => {
         .insert({
           pack_id: packId,
           word: formWord.trim(),
-          clue: formClue.trim(),
+          clue: formClue.trim() || null,
           difficulty: formDifficulty ? parseInt(formDifficulty) : null,
           is_active: formActive,
           created_by: user!.id,
