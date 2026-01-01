@@ -4,7 +4,7 @@ import { PageLayout } from '@/components/layout/PageLayout';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
-import { Library, FolderOpen, Users, Loader2 } from 'lucide-react';
+import { Library, FolderOpen, Users, Loader2, Flag } from 'lucide-react';
 
 const AdminPage = () => {
   const navigate = useNavigate();
@@ -63,6 +63,15 @@ const AdminPage = () => {
         >
           <Users className="w-6 h-6" />
           Usuarios
+        </Button>
+
+        <Button
+          onClick={() => navigate('/admin/reports')}
+          variant="outline"
+          className="w-full h-16 text-lg justify-start gap-4 border-2"
+        >
+          <Flag className="w-6 h-6" />
+          Reportes
         </Button>
       </div>
     </PageLayout>

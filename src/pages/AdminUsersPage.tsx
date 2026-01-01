@@ -196,7 +196,7 @@ const AdminUsersPage = () => {
 
                 {/* Info */}
                 <p className="text-sm text-muted-foreground text-center">
-                    Los usuarios con permiso pueden añadir palabras desde Administración → Palabras
+                    Los usuarios con permiso pueden añadir y editar palabras desde el menú "Editar palabras".
                 </p>
             </div>
         </PageLayout>

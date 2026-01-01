@@ -14,6 +14,103 @@ export type Database = {
   }
   public: {
     Tables: {
+      card_history: {
+        Row: {
+          action: string
+          card_id: string
+          created_at: string
+          id: string
+          new_clue: string | null
+          new_difficulty: number | null
+          new_is_active: boolean | null
+          new_word: string | null
+          old_clue: string | null
+          old_difficulty: number | null
+          old_is_active: boolean | null
+          old_word: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          card_id: string
+          created_at?: string
+          id?: string
+          new_clue?: string | null
+          new_difficulty?: number | null
+          new_is_active?: boolean | null
+          new_word?: string | null
+          old_clue?: string | null
+          old_difficulty?: number | null
+          old_is_active?: boolean | null
+          old_word?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          card_id?: string
+          created_at?: string
+          id?: string
+          new_clue?: string | null
+          new_difficulty?: number | null
+          new_is_active?: boolean | null
+          new_word?: string | null
+          old_clue?: string | null
+          old_difficulty?: number | null
+          old_is_active?: boolean | null
+          old_word?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_history_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      card_reports: {
+        Row: {
+          card_id: string
+          created_at: string
+          id: string
+          reason: string
+          reporter_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          id?: string
+          reason: string
+          reporter_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          id?: string
+          reason?: string
+          reporter_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_reports_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cards: {
         Row: {
           clue: string
@@ -165,6 +262,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_key: string | null
+          can_submit_words: boolean
           created_at: string
           display_name: string | null
           gender: string | null
@@ -174,6 +272,7 @@ export type Database = {
         }
         Insert: {
           avatar_key?: string | null
+          can_submit_words?: boolean
           created_at?: string
           display_name?: string | null
           gender?: string | null
@@ -183,6 +282,7 @@ export type Database = {
         }
         Update: {
           avatar_key?: string | null
+          can_submit_words?: boolean
           created_at?: string
           display_name?: string | null
           gender?: string | null
@@ -298,6 +398,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      card_used_in_sessions: { Args: { card_id: string }; Returns: boolean }
       generate_join_code: { Args: never; Returns: string }
       has_role: {
         Args: {
