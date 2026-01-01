@@ -4,15 +4,19 @@ import { PageLayout } from '@/components/layout/PageLayout';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useSavedRooms } from '@/hooks/useSavedRooms';
 import { cn } from '@/lib/utils';
-import { Users, Smartphone, UserCircle, LogIn, Settings } from 'lucide-react';
+import { Users, Smartphone, UserCircle, LogIn, Settings, FolderOpen } from 'lucide-react';
 import type { GameMode } from '@/types/game';
 
 const Index = () => {
   const [selectedMode, setSelectedMode] = useState<GameMode>('single');
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
+  const { rooms, setActiveRoom } = useSavedRooms();
   const navigate = useNavigate();
+
+  const savedRoomsForMode = rooms.filter(r => r.mode === selectedMode);
 
   return (
     <PageLayout showBack={false} className="flex flex-col">
@@ -87,6 +91,36 @@ const Index = () => {
             >
               Unirse con código
             </Button>
+          )}
+
+          {/* Saved rooms quick access */}
+          {savedRoomsForMode.length > 0 && selectedMode === 'single' && (
+            <div className="pt-2">
+              <p className="text-sm text-muted-foreground text-center mb-2">Salas guardadas</p>
+              <div className="space-y-2">
+                {savedRoomsForMode.slice(0, 3).map(room => (
+                  <Button
+                    key={room.id}
+                    onClick={() => {
+                      setActiveRoom(room.id);
+                      localStorage.setItem('impostor:play_again_room_id', room.id);
+                      navigate(`/new-game?mode=${selectedMode}`);
+                    }}
+                    variant="outline"
+                    className="w-full h-12 justify-start gap-3 border"
+                  >
+                    <FolderOpen className="w-5 h-5" />
+                    <span className="flex-1 text-left truncate">{room.name}</span>
+                    <span className="text-muted-foreground">{room.players.length} jugadores</span>
+                  </Button>
+                ))}
+                {savedRoomsForMode.length > 3 && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    +{savedRoomsForMode.length - 3} más en "Nueva partida"
+                  </p>
+                )}
+              </div>
+            </div>
           )}
         </div>
 

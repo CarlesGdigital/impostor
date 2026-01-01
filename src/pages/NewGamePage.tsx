@@ -3,17 +3,21 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { AddPlayerForm } from "@/components/game/AddPlayerForm";
 import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import { PackSelector } from "@/components/game/PackSelector";
+import { SavedRoomSelector } from "@/components/game/SavedRoomSelector";
 import { useAuth } from "@/hooks/useAuth";
 import { useGuestId } from "@/hooks/useGuestId";
 import { useGameSession } from "@/hooks/useGameSession";
+import { useSavedRooms } from "@/hooks/useSavedRooms";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, X, Users, Smartphone, AlertTriangle } from "lucide-react";
+import { Plus, X, Users, Smartphone, AlertTriangle, Save } from "lucide-react";
 import type { GameMode, GuestPlayer } from "@/types/game";
+import type { SavedRoom } from "@/types/savedRoom";
 
 export default function NewGamePage() {
   const [searchParams] = useSearchParams();
@@ -27,12 +31,16 @@ export default function NewGamePage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [selectedPackIds, setSelectedPackIds] = useState<string[]>([]);
   const [variant, setVariant] = useState<'classic' | 'double_topo' | 'guess_player'>('classic');
+  const [selectedSavedRoom, setSelectedSavedRoom] = useState<SavedRoom | null>(null);
+  const [roomName, setRoomName] = useState('');
+  const [showSaveOption, setShowSaveOption] = useState(true);
 
   const CREATION_TIMEOUT_MS = 10000; // 10 seconds
 
   const { user } = useAuth();
   const guestId = useGuestId();
   const { createSession } = useGameSession();
+  const { createRoom, updateRoom, getRoomById } = useSavedRooms();
   const navigate = useNavigate();
 
   const minPlayers = 3;
@@ -51,6 +59,34 @@ export default function NewGamePage() {
   useEffect(() => {
     if (variant === 'double_topo') setTopoCount(2);
   }, [variant]);
+
+  // Load players from selected saved room
+  useEffect(() => {
+    if (selectedSavedRoom) {
+      setPlayers(selectedSavedRoom.players);
+      setRoomName(selectedSavedRoom.name);
+    }
+  }, [selectedSavedRoom]);
+
+  // Check for "play again" room from previous game
+  useEffect(() => {
+    const playAgainRoomId = localStorage.getItem('impostor:play_again_room_id');
+    if (playAgainRoomId) {
+      localStorage.removeItem('impostor:play_again_room_id');
+      const room = getRoomById(playAgainRoomId);
+      if (room && room.mode === mode) {
+        setSelectedSavedRoom(room);
+      }
+    }
+  }, [mode, getRoomById]);
+
+  const handleSelectSavedRoom = (room: SavedRoom | null) => {
+    setSelectedSavedRoom(room);
+    if (!room) {
+      setPlayers([]);
+      setRoomName('');
+    }
+  };
 
   const handleAddPlayer = (player: GuestPlayer) => {
     if (players.length >= maxPlayers) {
@@ -110,6 +146,22 @@ export default function NewGamePage() {
 
       // Store variant in localStorage
       localStorage.setItem(`impostor:variant:${session.id}`, variant);
+
+      // Save room if enabled and mode is single
+      if (mode === "single" && showSaveOption && players.length >= minPlayers) {
+        const finalRoomName = roomName.trim() || `Sala ${new Date().toLocaleDateString()}`;
+        if (selectedSavedRoom) {
+          // Update existing room with new players
+          updateRoom(selectedSavedRoom.id, { 
+            players, 
+            name: finalRoomName 
+          });
+        } else {
+          // Create new saved room
+          createRoom(finalRoomName, mode, players);
+        }
+        toast.success('Sala guardada');
+      }
 
       if (mode === "single") {
         // Insert players with error checking
@@ -264,6 +316,15 @@ export default function NewGamePage() {
 
         <PackSelector selectedPackIds={selectedPackIds} onSelectionChange={setSelectedPackIds} />
 
+        {/* Saved Rooms Selector - only for single mode */}
+        {mode === "single" && (
+          <SavedRoomSelector
+            mode={mode}
+            onSelectRoom={handleSelectSavedRoom}
+            selectedRoomId={selectedSavedRoom?.id}
+          />
+        )}
+
         <div className="space-y-3">
           <Label className="text-lg font-bold">Número de topos</Label>
           <div className="flex items-center gap-4">
@@ -378,6 +439,33 @@ export default function NewGamePage() {
                 <Plus className="w-6 h-6 mr-2" />
                 Añadir jugador
               </Button>
+            )}
+
+            {/* Save room option */}
+            {players.length >= minPlayers && (
+              <div className="space-y-3 p-4 border-2 border-border bg-card">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="save-room"
+                    checked={showSaveOption}
+                    onChange={(e) => setShowSaveOption(e.target.checked)}
+                    className="w-5 h-5"
+                  />
+                  <label htmlFor="save-room" className="flex items-center gap-2 font-bold cursor-pointer">
+                    <Save className="w-5 h-5" />
+                    Guardar sala para futuras partidas
+                  </label>
+                </div>
+                {showSaveOption && (
+                  <Input
+                    placeholder="Nombre de la sala (ej: Familia, Amigos...)"
+                    value={roomName}
+                    onChange={(e) => setRoomName(e.target.value)}
+                    className="h-12"
+                  />
+                )}
+              </div>
             )}
           </div>
         )}
