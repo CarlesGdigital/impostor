@@ -164,6 +164,7 @@ export default function PlayPage() {
                 sessionId={sessionId || ''}
                 players={players}
                 mode="multi"
+                previousCardId={session.cardId}
               />
             )}
             <Button

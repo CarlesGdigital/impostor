@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useSavedRooms } from '@/hooks/useSavedRooms';
-import { RefreshCw, Save } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import type { Player, GameMode } from '@/types/game';
 import type { GuestPlayer } from '@/types/game';
 
@@ -10,11 +10,12 @@ interface PlayAgainButtonProps {
   players: Player[];
   mode: GameMode;
   roomName?: string;
+  previousCardId?: string; // Card ID from the finished game to exclude
 }
 
-export function PlayAgainButton({ sessionId, players, mode, roomName }: PlayAgainButtonProps) {
+export function PlayAgainButton({ sessionId, players, mode, roomName, previousCardId }: PlayAgainButtonProps) {
   const navigate = useNavigate();
-  const { createRoom, rooms, getRoomsByMode } = useSavedRooms();
+  const { createRoom, getRoomsByMode } = useSavedRooms();
 
   const handlePlayAgain = () => {
     // Convert players to GuestPlayer format for saving
@@ -45,6 +46,12 @@ export function PlayAgainButton({ sessionId, players, mode, roomName }: PlayAgai
     } else {
       // Use existing room
       localStorage.setItem('impostor:play_again_room_id', existingRoom.id);
+    }
+
+    // Store previous card ID to exclude from next random selection
+    if (previousCardId) {
+      localStorage.setItem('impostor:previous_card_id', previousCardId);
+      console.info('[PlayAgain] Storing previous card ID for exclusion:', previousCardId);
     }
 
     // Navigate to new game page with mode

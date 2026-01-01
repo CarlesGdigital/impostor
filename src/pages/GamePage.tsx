@@ -134,6 +134,7 @@ export default function GamePage() {
               sessionId={sessionId || ''}
               players={players}
               mode="single"
+              previousCardId={session.cardId}
             />
             <Button onClick={() => navigate("/")} variant="outline" className="w-full h-14 text-lg font-bold border-2">
               Volver al inicio
