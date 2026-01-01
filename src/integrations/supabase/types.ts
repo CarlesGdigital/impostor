@@ -164,6 +164,10 @@ export type Database = {
           card_id: string | null
           clue_text: string | null
           created_at: string
+          deceived_clue_text: string | null
+          deceived_topo_player_id: string | null
+          deceived_word_text: string | null
+          first_speaker_player_id: string | null
           host_guest_id: string | null
           host_user_id: string | null
           id: string
@@ -181,6 +185,10 @@ export type Database = {
           card_id?: string | null
           clue_text?: string | null
           created_at?: string
+          deceived_clue_text?: string | null
+          deceived_topo_player_id?: string | null
+          deceived_word_text?: string | null
+          first_speaker_player_id?: string | null
           host_guest_id?: string | null
           host_user_id?: string | null
           id?: string
@@ -198,6 +206,10 @@ export type Database = {
           card_id?: string | null
           clue_text?: string | null
           created_at?: string
+          deceived_clue_text?: string | null
+          deceived_topo_player_id?: string | null
+          deceived_word_text?: string | null
+          first_speaker_player_id?: string | null
           host_guest_id?: string | null
           host_user_id?: string | null
           id?: string
@@ -217,6 +229,20 @@ export type Database = {
             columns: ["card_id"]
             isOneToOne: false
             referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_sessions_deceived_topo_player_id_fkey"
+            columns: ["deceived_topo_player_id"]
+            isOneToOne: false
+            referencedRelation: "session_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_sessions_first_speaker_player_id_fkey"
+            columns: ["first_speaker_player_id"]
+            isOneToOne: false
+            referencedRelation: "session_players"
             referencedColumns: ["id"]
           },
           {

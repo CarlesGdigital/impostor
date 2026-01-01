@@ -34,6 +34,7 @@ export default function GamePage() {
   const isLastPlayer = currentIndex >= players.length - 1;
 
   const isTopo = useMemo(() => currentPlayer?.role === "topo", [currentPlayer]);
+  const isDeceivedTopo = useMemo(() => currentPlayer?.role === "deceived_topo", [currentPlayer]);
 
   // Multi-mode redirect: this page is only for single-player pass-the-phone
   useEffect(() => {
@@ -42,12 +43,13 @@ export default function GamePage() {
     }
   }, [session?.mode, navigate]);
 
-  // Primer jugador del turno (ordenado por turn_order)
+  // First speaker - use persisted random first speaker from database
   const firstPlayer = useMemo(() => {
-    if (players.length === 0) return null;
-    // Los jugadores ya vienen ordenados por turn_order del hook
-    return players[0];
-  }, [players]);
+    if (!session?.firstSpeakerPlayerId || players.length === 0) {
+      return players[0] || null;
+    }
+    return players.find(p => p.id === session.firstSpeakerPlayerId) || players[0];
+  }, [players, session?.firstSpeakerPlayerId]);
 
   // ✅ "Carta lista" = palabra Y pista (precargadas) Y jugador tiene rol asignado
   const canReveal = useMemo(() => {
@@ -91,17 +93,36 @@ export default function GamePage() {
 
   // Pantalla final / resumen (solo se muestra tras pulsar "Revelar resultado")
   if (phase === "done") {
-    const topos = players.filter((p) => p.role === "topo");
+    const realTopos = players.filter((p) => p.role === "topo");
+    const deceivedTopos = players.filter((p) => p.role === "deceived_topo");
+    const allTopos = [...realTopos, ...deceivedTopos];
+    
     return (
       <PageLayout title="Resumen" showBack={false}>
         <div className="max-w-md mx-auto space-y-8 text-center">
           <div className="text-6xl">🎭</div>
+          
+          {/* Real Topo(s) */}
           <div className="space-y-2">
-            <p className="text-muted-foreground">Topo(s):</p>
-            <p className="text-3xl font-bold">{topos.map((t) => t.displayName).join(", ")}</p>
+            <p className="text-muted-foreground">Topo(s) real(es):</p>
+            <p className="text-3xl font-bold">{realTopos.map((t) => t.displayName).join(", ") || "—"}</p>
           </div>
+          
+          {/* Deceived Topo (if double_topo variant) */}
+          {deceivedTopos.length > 0 && (
+            <div className="space-y-2 p-4 border-2 border-dashed border-amber-500 rounded-lg bg-amber-500/10">
+              <p className="text-muted-foreground">🎭 Topo engañado (no lo sabía):</p>
+              <p className="text-2xl font-bold text-amber-500">{deceivedTopos.map((t) => t.displayName).join(", ")}</p>
+              {session.deceivedWordText && (
+                <p className="text-sm text-muted-foreground">
+                  Creía que la palabra era: <span className="font-bold">{session.deceivedWordText}</span>
+                </p>
+              )}
+            </div>
+          )}
+          
           <div className="space-y-2">
-            <p className="text-muted-foreground">Palabra:</p>
+            <p className="text-muted-foreground">Palabra real:</p>
             <p className="text-4xl font-bold">{session.wordText || "—"}</p>
           </div>
           <div className="space-y-2">
@@ -265,25 +286,24 @@ export default function GamePage() {
   }
 
   // Fase "reveal"
-  console.debug("[GamePage] reveal phase:", currentPlayer.role, isTopo);
+  console.debug("[GamePage] reveal phase:", currentPlayer.role, isTopo, isDeceivedTopo);
 
   // Read variant data from localStorage
   const variant = sessionId ? localStorage.getItem(`impostor:variant:${sessionId}`) || 'classic' : 'classic';
-  const confusedTopoId = sessionId ? localStorage.getItem(`impostor:confusedTopoId:${sessionId}`) : null;
   const targetPlayerId = sessionId ? localStorage.getItem(`impostor:targetPlayerId:${sessionId}`) : null;
 
-  // Calculate display values based on variant
+  // Calculate display values based on variant and role
   let displayAsTopo = isTopo;
   let displayWord = session.wordText ?? "";
   let displayClue = session.clueText ?? "";
   let extraNote: string | null = null;
 
-  if (variant === 'double_topo') {
-    // Confused topo sees crew card (not topo)
-    if (currentPlayer.id === confusedTopoId) {
-      displayAsTopo = false;
-      console.info('[GamePage] Showing confused topo as crew');
-    }
+  if (isDeceivedTopo) {
+    // Deceived topo: show as CREW with alternative word (they don't know they're topo)
+    displayAsTopo = false;
+    displayWord = session.deceivedWordText ?? session.wordText ?? "";
+    displayClue = ""; // Crew doesn't see clue, just word
+    console.info('[GamePage] Showing deceived topo as crew with alt word:', displayWord);
   } else if (variant === 'guess_player') {
     if (isTopo) {
       // Topo doesn't see the word

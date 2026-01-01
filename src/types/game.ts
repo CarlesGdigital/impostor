@@ -1,6 +1,6 @@
 export type GameMode = 'single' | 'multi';
 export type GameStatus = 'lobby' | 'dealing' | 'ready' | 'discussion' | 'finished' | 'closed';
-export type PlayerRole = 'crew' | 'topo';
+export type PlayerRole = 'crew' | 'topo' | 'deceived_topo';
 export type Gender = 'male' | 'female' | 'other';
 
 export interface Player {
@@ -32,6 +32,9 @@ export interface GameSession {
   clueText?: string;
   selectedPackIds?: string[];
   firstSpeakerPlayerId?: string;
+  deceivedTopoPlayerId?: string;
+  deceivedWordText?: string;
+  deceivedClueText?: string;
   createdAt: string;
 }
 

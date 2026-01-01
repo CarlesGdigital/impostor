@@ -36,6 +36,9 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     clueText: data.clue_text,
     selectedPackIds: data.selected_pack_ids,
     firstSpeakerPlayerId: data.first_speaker_player_id,
+    deceivedTopoPlayerId: data.deceived_topo_player_id,
+    deceivedWordText: data.deceived_word_text,
+    deceivedClueText: data.deceived_clue_text,
     createdAt: data.created_at,
   });
 
@@ -481,33 +484,107 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       const variant = localStorage.getItem(`impostor:variant:${session.id}`) || 'classic';
       console.info('[startDealing] Variant:', variant);
 
-      // Assign roles
+      // TRUE RANDOM: Fisher-Yates shuffle for unbiased randomization
+      const shuffleArray = <T,>(array: T[]): T[] => {
+        const shuffled = [...array];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        return shuffled;
+      };
+
+      // Shuffle player IDs for truly random topo selection (no turn_order bias)
       const playerIds = players.map(p => p.id);
-      const shuffled = [...playerIds].sort(() => Math.random() - 0.5);
+      const shuffledForRoles = shuffleArray(playerIds);
 
-      // For double_topo, force 2 topos
-      const effectiveTopoCount = variant === 'double_topo' ? 2 : session.topoCount;
-      const topoIds = shuffled.slice(0, effectiveTopoCount);
+      // Determine topo count based on variant
+      let effectiveTopoCount = session.topoCount;
+      let deceivedTopoId: string | null = null;
+      let deceivedWordText: string | null = null;
+      let deceivedClueText: string | null = null;
 
-      // For double_topo: pick one confused topo
-      if (variant === 'double_topo' && topoIds.length >= 2) {
-        const confusedTopoId = topoIds[Math.floor(Math.random() * topoIds.length)];
-        localStorage.setItem(`impostor:confusedTopoId:${session.id}`, confusedTopoId);
-        console.info('[startDealing] Confused topo:', confusedTopoId);
+      if (variant === 'double_topo') {
+        // Double topo: 1 real topo + 1 deceived topo
+        effectiveTopoCount = 1; // Only 1 real topo who knows
+        const realTopoId = shuffledForRoles[0];
+        // Pick deceived topo from remaining players (not the real topo)
+        const remainingForDeceived = shuffledForRoles.slice(1);
+        deceivedTopoId = remainingForDeceived[Math.floor(Math.random() * remainingForDeceived.length)];
+        
+        console.info('[startDealing] Double topo mode:', { realTopoId, deceivedTopoId });
+
+        // Get alternative word for deceived topo from same packs
+        const packIds = session.selectedPackIds || [];
+        if (packIds.length > 0) {
+          // Shuffle packs and try to find a different card
+          const shuffledPacks = shuffleArray(packIds);
+          
+          for (const packChunk of [shuffledPacks.slice(0, 50)]) {
+            const { count } = await supabase
+              .from('cards')
+              .select('id', { count: 'exact', head: true })
+              .in('pack_id', packChunk)
+              .neq('is_active', false)
+              .neq('id', session.cardId || ''); // Exclude real word
+
+            if (count && count > 0) {
+              const randomOffset = Math.floor(Math.random() * count);
+              const { data: altCard } = await supabase
+                .from('cards')
+                .select('word, clue')
+                .in('pack_id', packChunk)
+                .neq('is_active', false)
+                .neq('id', session.cardId || '')
+                .range(randomOffset, randomOffset)
+                .maybeSingle();
+
+              if (altCard) {
+                deceivedWordText = altCard.word;
+                deceivedClueText = altCard.clue;
+                console.info('[startDealing] Alternative word for deceived:', deceivedWordText);
+                break;
+              }
+            }
+          }
+
+          // Fallback: if no alt word found, use a placeholder
+          if (!deceivedWordText) {
+            deceivedWordText = 'Objeto misterioso';
+            deceivedClueText = 'Algo que no es lo que parece';
+            console.warn('[startDealing] No alt word found, using fallback');
+          }
+        }
+      } else {
+        effectiveTopoCount = session.topoCount;
       }
 
-      // Update players with roles and turn order
+      const topoIds = shuffledForRoles.slice(0, effectiveTopoCount);
+
+      // Shuffle players again for turn order (independent randomization)
+      const shuffledForTurnOrder = shuffleArray(playerIds);
+
+      // Update players with roles and randomized turn order
       for (let i = 0; i < players.length; i++) {
-        const player = players[i];
-        const role = topoIds.includes(player.id) ? 'topo' : 'crew';
+        const playerId = shuffledForTurnOrder[i];
+        const player = players.find(p => p.id === playerId)!;
+        
+        let role: string;
+        if (variant === 'double_topo' && playerId === deceivedTopoId) {
+          role = 'deceived_topo'; // Stored as deceived_topo but UI shows as crew
+        } else if (topoIds.includes(playerId)) {
+          role = 'topo';
+        } else {
+          role = 'crew';
+        }
 
         await supabase
           .from('session_players')
           .update({ role, turn_order: i, has_revealed: false })
-          .eq('id', player.id);
+          .eq('id', playerId);
       }
 
-      // Refetch players to get updated roles
+      // Refetch players to get updated roles with new turn order
       const { data: updatedPlayersData } = await supabase
         .from('session_players')
         .select('*')
@@ -518,6 +595,10 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         setPlayers(updatedPlayersData.map(mapPlayer));
         console.info('[startDealing] Players refetched with roles:', updatedPlayersData.length);
       }
+
+      // TRUE RANDOM first speaker: pick from all players randomly (not by turn_order)
+      const randomFirstSpeaker = shuffleArray(playerIds)[0];
+      console.info('[startDealing] Random first speaker:', randomFirstSpeaker);
 
       // For guess_player: pick target and update word
       let wordTextOverride = null;
@@ -534,11 +615,22 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         }
       }
 
-      // Update session status to 'dealing' (and word/clue for guess_player)
-      const updateData: any = { status: 'dealing' };
+      // Update session status to 'dealing' with all persisted data
+      const updateData: any = { 
+        status: 'dealing',
+        first_speaker_player_id: randomFirstSpeaker,
+      };
+      
       if (wordTextOverride) {
         updateData.word_text = wordTextOverride;
         updateData.clue_text = clueTextOverride;
+      }
+
+      // Persist double_topo data in database for stability on reload
+      if (variant === 'double_topo' && deceivedTopoId) {
+        updateData.deceived_topo_player_id = deceivedTopoId;
+        updateData.deceived_word_text = deceivedWordText;
+        updateData.deceived_clue_text = deceivedClueText;
       }
 
       const { data: updatedSessionData, error: updateError } = await supabase
@@ -556,10 +648,12 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
 
       if (updatedSessionData) {
         setSession(mapSession(updatedSessionData));
+        setLocalFirstSpeakerId(randomFirstSpeaker);
         console.info('[startDealing] end - SUCCESS', {
           sessionId: session.id,
           status: updatedSessionData.status,
           variant,
+          firstSpeaker: randomFirstSpeaker,
         });
       }
 
@@ -615,21 +709,15 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
   };
 
   // Transition to discussion phase (host only for multiplayer)
-  // UPDATED: Uses Realtime Broadcast instead of DB Update to avoid migration reqs
+  // Uses persisted first_speaker_player_id for stability on reload
   const continueToDiscussion = async (): Promise<boolean> => {
     if (!session) {
       console.error('[continueToDiscussion] No session');
       return false;
     }
 
-    // Determine first speaker (first in turn order or random)
-    let firstSpeakerId = players[0]?.id;
-    // Try to pick non-topo if possible, or just random
-    const nonTopos = players.filter(p => p.role !== 'topo');
-    if (nonTopos.length > 0) {
-      const randomStart = Math.floor(Math.random() * nonTopos.length);
-      firstSpeakerId = nonTopos[randomStart].id;
-    }
+    // Use the persisted first speaker from database (set during startDealing)
+    const firstSpeakerId = session.firstSpeakerPlayerId || players[0]?.id;
 
     console.info('[continueToDiscussion] Broadcasting discussion phase...', {
       sessionId: session.id,
@@ -694,7 +782,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       .update({ role: null, has_revealed: false })
       .eq('session_id', session.id);
 
-    // Reset session
+    // Reset session - clear all game-specific data including double_topo fields
     await supabase
       .from('game_sessions')
       .update({
@@ -702,6 +790,10 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         card_id: null,
         word_text: null,
         clue_text: null,
+        first_speaker_player_id: null,
+        deceived_topo_player_id: null,
+        deceived_word_text: null,
+        deceived_clue_text: null,
       })
       .eq('id', session.id);
   };
