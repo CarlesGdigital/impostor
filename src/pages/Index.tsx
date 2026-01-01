@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useSavedRooms } from '@/hooks/useSavedRooms';
 import { cn } from '@/lib/utils';
-import { Users, Smartphone, UserCircle, LogIn, Settings, FolderOpen } from 'lucide-react';
+import { Users, Smartphone, UserCircle, LogIn, Settings, FolderOpen, BookOpen } from 'lucide-react';
 import type { GameMode } from '@/types/game';
 
 const Index = () => {
@@ -135,6 +135,14 @@ const Index = () => {
               >
                 <UserCircle className="w-6 h-6" />
                 Mi perfil
+              </Button>
+              <Button
+                onClick={() => navigate('/words')}
+                variant="ghost"
+                className="w-full h-14 text-lg justify-start gap-3"
+              >
+                <BookOpen className="w-6 h-6" />
+                Editar palabras
               </Button>
               {isAdmin && (
                 <Button
