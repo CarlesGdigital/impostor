@@ -20,7 +20,7 @@ interface PackSelectorProps {
   onSelectionChange: (packIds: string[]) => void;
 }
 
-const STORAGE_KEY = 'topo_preferred_master_category';
+const STORAGE_KEY = 'topo_preferred_master_categories';
 const ADULT_CONFIRMED_KEY = 'topo_adult_content_confirmed';
 
 type MasterCategory = 'general' | 'benicolet' | 'picantes';
@@ -28,8 +28,9 @@ type MasterCategory = 'general' | 'benicolet' | 'picantes';
 export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelectorProps) {
   const [packs, setPacks] = useState<Pack[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedMaster, setSelectedMaster] = useState<MasterCategory>('general');
+  const [selectedMasters, setSelectedMasters] = useState<MasterCategory[]>(['general']);
   const [showAdultWarning, setShowAdultWarning] = useState(false);
+  const [pendingCategory, setPendingCategory] = useState<MasterCategory | null>(null);
   const [adultConfirmed, setAdultConfirmed] = useState(() => {
     return localStorage.getItem(ADULT_CONFIRMED_KEY) === 'true';
   });
@@ -42,16 +43,19 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
   // Pre-load preference once packs are loaded
   useEffect(() => {
     if (packs.length > 0 && selectedPackIds.length === 0) {
-      const stored = localStorage.getItem(STORAGE_KEY) as MasterCategory;
-      if (stored && ['general', 'benicolet', 'picantes'].includes(stored)) {
-        // Don't auto-select picantes unless confirmed
-        if (stored === 'picantes' && !adultConfirmed) {
-          selectMasterCategory('general', packs);
-        } else {
-          selectMasterCategory(stored, packs);
-        }
-      } else {
-        selectMasterCategory('general', packs);
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        const storedCategories: MasterCategory[] = stored ? JSON.parse(stored) : ['general'];
+        // Filter out picantes if not confirmed
+        const validCategories = storedCategories.filter(
+          cat => ['general', 'benicolet', 'picantes'].includes(cat) && (cat !== 'picantes' || adultConfirmed)
+        );
+        const categories = validCategories.length > 0 ? validCategories : ['general'];
+        setSelectedMasters(categories as MasterCategory[]);
+        updatePackSelection(categories as MasterCategory[], packs);
+      } catch {
+        setSelectedMasters(['general']);
+        updatePackSelection(['general'], packs);
       }
     }
   }, [packs]);
@@ -117,19 +121,31 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
     return groups;
   }, [packs]);
 
-  const selectMasterCategory = (category: MasterCategory, currentPacks = packs) => {
+  const updatePackSelection = (categories: MasterCategory[], currentPacks = packs) => {
+    const categoryPacks = currentPacks.filter(p => categories.includes(getPackCategory(p)));
+    onSelectionChange(categoryPacks.map(p => p.id));
+  };
+
+  const toggleMasterCategory = (category: MasterCategory) => {
     // If selecting picantes and not confirmed, show warning
-    if (category === 'picantes' && !adultConfirmed) {
+    if (category === 'picantes' && !adultConfirmed && !selectedMasters.includes('picantes')) {
+      setPendingCategory('picantes');
       setShowAdultWarning(true);
       return;
     }
 
-    setSelectedMaster(category);
-    localStorage.setItem(STORAGE_KEY, category);
+    let newCategories: MasterCategory[];
+    if (selectedMasters.includes(category)) {
+      // Don't allow deselecting the last category
+      if (selectedMasters.length === 1) return;
+      newCategories = selectedMasters.filter(c => c !== category);
+    } else {
+      newCategories = [...selectedMasters, category];
+    }
 
-    // Auto-select all packs in this category
-    const categoryPacks = currentPacks.filter(p => getPackCategory(p) === category);
-    onSelectionChange(categoryPacks.map(p => p.id));
+    setSelectedMasters(newCategories);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newCategories));
+    updatePackSelection(newCategories);
   };
 
   const handleAdultConfirm = () => {
@@ -137,11 +153,12 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
     localStorage.setItem(ADULT_CONFIRMED_KEY, 'true');
     setShowAdultWarning(false);
     
-    // Now actually select picantes
-    setSelectedMaster('picantes');
-    localStorage.setItem(STORAGE_KEY, 'picantes');
-    const categoryPacks = packs.filter(p => getPackCategory(p) === 'picantes');
-    onSelectionChange(categoryPacks.map(p => p.id));
+    // Now add picantes to selection
+    const newCategories = [...selectedMasters, 'picantes'] as MasterCategory[];
+    setSelectedMasters(newCategories);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newCategories));
+    updatePackSelection(newCategories);
+    setPendingCategory(null);
   };
 
   const handleTogglePack = (packId: string) => {
@@ -167,7 +184,7 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
     );
   }
 
-  const currentCategoryPacks = packsByCategory[selectedMaster] || [];
+  const currentCategoryPacks = selectedMasters.flatMap(cat => packsByCategory[cat] || []);
 
   return (
     <div className="space-y-6">
@@ -206,22 +223,22 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
           icon={<Globe className="w-6 h-6" />}
           label="General"
           count={packsByCategory.general.length}
-          active={selectedMaster === 'general'}
-          onClick={() => selectMasterCategory('general')}
+          active={selectedMasters.includes('general')}
+          onClick={() => toggleMasterCategory('general')}
         />
         <MasterTile
           icon={<MapPin className="w-6 h-6" />}
           label="Benicolet"
           count={packsByCategory.benicolet.length}
-          active={selectedMaster === 'benicolet'}
-          onClick={() => selectMasterCategory('benicolet')}
+          active={selectedMasters.includes('benicolet')}
+          onClick={() => toggleMasterCategory('benicolet')}
         />
         <MasterTile
           icon={<Flame className="w-6 h-6" />}
           label="Picantes"
           count={packsByCategory.picantes.length}
-          active={selectedMaster === 'picantes'}
-          onClick={() => selectMasterCategory('picantes')}
+          active={selectedMasters.includes('picantes')}
+          onClick={() => toggleMasterCategory('picantes')}
           variant="spicy"
           badge="+18"
         />
