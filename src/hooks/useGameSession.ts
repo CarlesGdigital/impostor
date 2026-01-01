@@ -295,9 +295,15 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     topoCount: number,
     hostUserId?: string,
     hostGuestId?: string,
-    selectedPackIds?: string[]
+    selectedPackIds?: string[],
+    excludeCardId?: string // Card ID to exclude from random selection (previous game's card)
   ): Promise<GameSession | null> => {
-    console.info('[createSession] Creating session', { mode, topoCount, packCount: selectedPackIds?.length || 0 });
+    console.info('[createSession] Creating session', { 
+      mode, 
+      topoCount, 
+      packCount: selectedPackIds?.length || 0,
+      excludeCardId: excludeCardId || 'none'
+    });
 
     // Validate pack selection
     if (!selectedPackIds || selectedPackIds.length === 0) {
@@ -311,6 +317,8 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     console.info('[createSession] Step 1: Getting random card (Chunked Strategy)...');
 
     let randomCard: { id: string; word: string; clue: string; pack_id: string } | null = null;
+    let totalCandidateCount = 0;
+    let excludedPrevious = false;
 
     try {
       // Shuffle pack IDs to ensure randomness across all selected packs
@@ -324,36 +332,76 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         const chunk = shuffledPacks.slice(i, i + CHUNK_SIZE);
         console.info(`[createSession] Processing chunk ${Math.floor(i / CHUNK_SIZE) + 1}/${Math.ceil(shuffledPacks.length / CHUNK_SIZE)} (${chunk.length} packs)`);
 
-        // Check active cards in this chunk
-        const { count, error: countError } = await supabase
+        // Build query - exclude previous card if provided and there are alternatives
+        let countQuery = supabase
           .from('cards')
           .select('id', { count: 'exact', head: true })
           .in('pack_id', chunk)
           .neq('is_active', false);
 
-        if (countError) {
-          console.warn('[createSession] Error counting chunk:', countError);
+        const { count: totalCount, error: totalCountError } = await countQuery;
+
+        if (totalCountError) {
+          console.warn('[createSession] Error counting chunk:', totalCountError);
           continue;
         }
 
-        if (count && count > 0) {
+        if (!totalCount || totalCount === 0) {
+          continue;
+        }
+
+        totalCandidateCount += totalCount;
+
+        // Check if we should exclude the previous card
+        let effectiveCount = totalCount;
+        let shouldExcludePrevious = false;
+
+        if (excludeCardId && totalCount > 1) {
+          // Check if the previous card is in this chunk
+          const { count: prevCardInChunk } = await supabase
+            .from('cards')
+            .select('id', { count: 'exact', head: true })
+            .eq('id', excludeCardId)
+            .in('pack_id', chunk)
+            .neq('is_active', false);
+
+          if (prevCardInChunk && prevCardInChunk > 0) {
+            shouldExcludePrevious = true;
+            effectiveCount = totalCount - 1;
+            excludedPrevious = true;
+            console.info('[createSession] Will exclude previous card from selection', { 
+              excludeCardId, 
+              totalCount, 
+              effectiveCount 
+            });
+          }
+        }
+
+        if (effectiveCount > 0) {
           candidatesFound = true;
-          console.info(`[createSession] Found ${count} active candidates in this chunk`);
+          console.info(`[createSession] Found ${effectiveCount} active candidates in this chunk (excluding previous: ${shouldExcludePrevious})`);
 
           // Select from this chunk
           // Retry loop for robustness
           let attempts = 0;
-          const MAX_ATTEMPTS = 3;
+          const MAX_ATTEMPTS = 5;
 
           while (!randomCard && attempts < MAX_ATTEMPTS) {
             attempts++;
-            const randomOffset = Math.floor(Math.random() * count);
+            const randomOffset = Math.floor(Math.random() * effectiveCount);
 
-            const { data, error: fetchError } = await supabase
+            let fetchQuery = supabase
               .from('cards')
               .select('id, word, clue, pack_id')
               .in('pack_id', chunk)
-              .neq('is_active', false)
+              .neq('is_active', false);
+
+            // Exclude previous card if applicable
+            if (shouldExcludePrevious && excludeCardId) {
+              fetchQuery = fetchQuery.neq('id', excludeCardId);
+            }
+
+            const { data, error: fetchError } = await fetchQuery
               .range(randomOffset, randomOffset)
               .maybeSingle();
 
@@ -389,6 +437,15 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       setError('Error al seleccionar una palabra aleatoria. Por favor, inténtalo de nuevo.');
       return null;
     }
+
+    // Diagnostic logging
+    console.info('[createSession] 🎲 Card selection diagnostic:', {
+      previousCardId: excludeCardId || 'none',
+      newCardId: randomCard.id,
+      candidateCount: totalCandidateCount,
+      excludedPrevious,
+      newWord: randomCard.word
+    });
 
     console.info('[createSession] Card selected:', { word: randomCard.word, packId: randomCard.pack_id });
 

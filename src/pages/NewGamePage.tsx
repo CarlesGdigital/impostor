@@ -80,6 +80,17 @@ export default function NewGamePage() {
     }
   }, [mode, getRoomById]);
 
+  // Get previous card ID for exclusion (set by PlayAgainButton)
+  const getPreviousCardId = (): string | undefined => {
+    const id = localStorage.getItem('impostor:previous_card_id');
+    if (id) {
+      localStorage.removeItem('impostor:previous_card_id');
+      console.info('[NewGame] Retrieved previous card ID for exclusion:', id);
+      return id;
+    }
+    return undefined;
+  };
+
   const handleSelectSavedRoom = (room: SavedRoom | null) => {
     setSelectedSavedRoom(room);
     if (!room) {
@@ -127,8 +138,9 @@ export default function NewGamePage() {
     }, CREATION_TIMEOUT_MS);
 
     try {
-      console.info('[NewGame] calling createSession');
-      const session = await createSession(mode, topoCount, user?.id, !user ? guestId : undefined, selectedPackIds);
+      const previousCardId = getPreviousCardId();
+      console.info('[NewGame] calling createSession', { previousCardId });
+      const session = await createSession(mode, topoCount, user?.id, !user ? guestId : undefined, selectedPackIds, previousCardId);
 
       // If timeout already triggered, abort
       if (timeoutTriggered) {
