@@ -5,31 +5,36 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Loader2, Edit2, History, Flag, Search } from 'lucide-react';
+import { Plus, Loader2, Edit2, History, Flag, Search, Globe, MapPin, Flame } from 'lucide-react';
 import { WordEditDialog } from '@/components/words/WordEditDialog';
 import { WordHistoryDialog } from '@/components/words/WordHistoryDialog';
 import { WordReportDialog } from '@/components/words/WordReportDialog';
-
-interface Pack {
-  id: string;
-  name: string;
-}
+import type { MasterCategory } from '@/types/admin';
 
 interface Card {
   id: string;
-  packId: string;
+  masterCategory: MasterCategory;
   word: string;
   clue: string;
   difficulty?: number | null;
   isActive: boolean;
   createdAt: string;
   createdBy: string;
+  packId?: string;
   packName?: string;
   creatorName?: string;
 }
+
+// Map to get or create packs for each master category
+const MASTER_CATEGORY_PACKS: Record<MasterCategory, { name: string; slug: string }> = {
+  general: { name: 'General', slug: 'general' },
+  benicolet: { name: 'Benicolet', slug: 'benicolet' },
+  picantes: { name: 'Picantes', slug: 'picantes' },
+};
 
 export default function WordsPage() {
   const navigate = useNavigate();
@@ -38,7 +43,7 @@ export default function WordsPage() {
   const [checkingPermission, setCheckingPermission] = useState(true);
 
   const [cards, setCards] = useState<Card[]>([]);
-  const [packs, setPacks] = useState<Pack[]>([]);
+  const [packMap, setPackMap] = useState<Map<string, { id: string; masterCategory: MasterCategory }>>(new Map());
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -82,24 +87,38 @@ export default function WordsPage() {
     setCheckingPermission(false);
   };
 
+  const getMasterCategoryFromPack = (packMasterCategory: string | null | undefined): MasterCategory => {
+    if (packMasterCategory && ['general', 'benicolet', 'picantes'].includes(packMasterCategory)) {
+      return packMasterCategory as MasterCategory;
+    }
+    return 'general';
+  };
+
   const fetchData = async () => {
     setLoading(true);
 
-    // Fetch packs
+    // Fetch packs to build map
     const { data: packsData } = await supabase
       .from('packs')
-      .select('id, name')
+      .select('id, name, slug, master_category')
       .eq('is_active', true)
       .order('name');
 
-    setPacks(packsData || []);
+    const newPackMap = new Map<string, { id: string; masterCategory: MasterCategory }>();
+    (packsData || []).forEach(p => {
+      newPackMap.set(p.id, {
+        id: p.id,
+        masterCategory: getMasterCategoryFromPack(p.master_category)
+      });
+    });
+    setPackMap(newPackMap);
 
-    // Fetch cards - use left join for profiles to handle missing data
+    // Fetch cards
     const { data: cardsData } = await supabase
       .from('cards')
       .select(`
         *,
-        packs(name)
+        packs(name, master_category)
       `)
       .order('created_at', { ascending: false });
 
@@ -115,6 +134,7 @@ export default function WordsPage() {
     setCards((cardsData || []).map(c => ({
       id: c.id,
       packId: c.pack_id,
+      masterCategory: getMasterCategoryFromPack((c.packs as any)?.master_category),
       word: c.word,
       clue: c.clue,
       difficulty: c.difficulty,
@@ -128,10 +148,46 @@ export default function WordsPage() {
     setLoading(false);
   };
 
+  // Get or create pack for master category
+  const getOrCreatePackForCategory = async (category: MasterCategory): Promise<string | null> => {
+    const packInfo = MASTER_CATEGORY_PACKS[category];
+    
+    // Try to find existing pack with this master_category
+    const { data: existingPack } = await supabase
+      .from('packs')
+      .select('id')
+      .eq('master_category', category)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingPack) {
+      return existingPack.id;
+    }
+
+    // Create new pack for this category
+    const { data: newPack, error } = await supabase
+      .from('packs')
+      .insert({
+        name: packInfo.name,
+        slug: packInfo.slug,
+        master_category: category,
+        is_active: true
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.error('Error creating pack:', error);
+      return null;
+    }
+
+    return newPack.id;
+  };
+
   const handleSaveWord = async (data: {
     id?: string;
-    packId: string;
-    newPackName?: string;
+    masterCategory: MasterCategory;
     word: string;
     clue: string;
     difficulty?: number | null;
@@ -142,28 +198,13 @@ export default function WordsPage() {
       return false;
     }
 
-    if (!data.packId && !data.newPackName) {
-      toast.error('Selecciona o crea una categoría');
-      return false;
-    }
-
     try {
-      let packId = data.packId;
-
-      // Create new pack if needed
-      if (data.newPackName) {
-        const slug = data.newPackName.toLowerCase().replace(/\s+/g, '-');
-        const { data: newPack, error: packError } = await supabase
-          .from('packs')
-          .insert({ name: data.newPackName, slug })
-          .select()
-          .single();
-
-        if (packError) {
-          toast.error('Error al crear la categoría');
-          return false;
-        }
-        packId = newPack.id;
+      // Get or create pack for this master category
+      const packId = await getOrCreatePackForCategory(data.masterCategory);
+      
+      if (!packId) {
+        toast.error('Error al obtener la categoría');
+        return false;
       }
 
       if (data.id) {
@@ -356,11 +397,37 @@ export default function WordsPage() {
     });
   };
 
+  const getCategoryBadge = (category: MasterCategory) => {
+    switch (category) {
+      case 'benicolet':
+        return (
+          <Badge variant="outline" className="gap-1">
+            <MapPin className="w-3 h-3" />
+            Benicolet
+          </Badge>
+        );
+      case 'picantes':
+        return (
+          <Badge variant="destructive" className="gap-1">
+            <Flame className="w-3 h-3" />
+            Picantes
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="secondary" className="gap-1">
+            <Globe className="w-3 h-3" />
+            General
+          </Badge>
+        );
+    }
+  };
+
   // Filter cards by search
   const filteredCards = cards.filter(card => 
     card.word.toLowerCase().includes(searchQuery.toLowerCase()) ||
     card.clue.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    card.packName?.toLowerCase().includes(searchQuery.toLowerCase())
+    card.masterCategory.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   if (authLoading || checkingPermission) {
@@ -438,7 +505,7 @@ export default function WordsPage() {
                 ) : (
                   filteredCards.map((card) => (
                     <TableRow key={card.id}>
-                      <TableCell className="font-medium">{card.packName}</TableCell>
+                      <TableCell>{getCategoryBadge(card.masterCategory)}</TableCell>
                       <TableCell className="font-bold">{card.word}</TableCell>
                       <TableCell className="text-muted-foreground max-w-xs truncate">
                         {card.clue}
@@ -500,7 +567,6 @@ export default function WordsPage() {
       <WordEditDialog
         open={showEditDialog}
         onOpenChange={setShowEditDialog}
-        packs={packs}
         editingCard={editingCard}
         onSave={handleSaveWord}
       />

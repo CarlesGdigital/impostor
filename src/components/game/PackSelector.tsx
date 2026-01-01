@@ -5,14 +5,14 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Loader2, Globe, Baby, MapPin, Check, Flame, AlertTriangle } from 'lucide-react';
+import { Loader2, Globe, MapPin, Check, Flame, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Pack {
   id: string;
   name: string;
   slug: string;
-  master_category?: 'general' | 'ninos' | 'benicolet' | 'picantes';
+  master_category?: 'general' | 'benicolet' | 'picantes';
 }
 
 interface PackSelectorProps {
@@ -23,7 +23,7 @@ interface PackSelectorProps {
 const STORAGE_KEY = 'topo_preferred_master_category';
 const ADULT_CONFIRMED_KEY = 'topo_adult_content_confirmed';
 
-type MasterCategory = 'general' | 'ninos' | 'benicolet' | 'picantes';
+type MasterCategory = 'general' | 'benicolet' | 'picantes';
 
 export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelectorProps) {
   const [packs, setPacks] = useState<Pack[]>([]);
@@ -43,7 +43,7 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
   useEffect(() => {
     if (packs.length > 0 && selectedPackIds.length === 0) {
       const stored = localStorage.getItem(STORAGE_KEY) as MasterCategory;
-      if (stored && ['general', 'ninos', 'benicolet', 'picantes'].includes(stored)) {
+      if (stored && ['general', 'benicolet', 'picantes'].includes(stored)) {
         // Don't auto-select picantes unless confirmed
         if (stored === 'picantes' && !adultConfirmed) {
           selectMasterCategory('general', packs);
@@ -82,9 +82,9 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
   };
 
   const getPackCategory = (pack: Pack): MasterCategory => {
-    // 1. DB Column
+    // 1. DB Column - only accept valid categories
     const explicitCat = pack.master_category;
-    if (explicitCat && ['general', 'ninos', 'benicolet', 'picantes'].includes(explicitCat)) {
+    if (explicitCat && ['general', 'benicolet', 'picantes'].includes(explicitCat)) {
       return explicitCat as MasterCategory;
     }
 
@@ -95,19 +95,15 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
     if (s.includes('picante') || n.includes('picante') || s.includes('adulto') || n.includes('adulto') || 
         s.includes('spicy') || n.includes('+18')) return 'picantes';
     if (s.includes('benicolet') || n.includes('benicolet')) return 'benicolet';
-    if (s.includes('nino') || s.includes('infantil') || s.includes('kid') ||
-      n.includes('niño') || n.includes('infantil')) {
-      return 'ninos';
-    }
 
+    // Everything else goes to general (including legacy 'ninos')
     return 'general';
   };
 
-  // Group packs
+  // Group packs - only 3 categories
   const packsByCategory = useMemo(() => {
     const groups: Record<MasterCategory, Pack[]> = {
       general: [],
-      ninos: [],
       benicolet: [],
       picantes: []
     };
@@ -205,20 +201,13 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <MasterTile
           icon={<Globe className="w-6 h-6" />}
           label="General"
           count={packsByCategory.general.length}
           active={selectedMaster === 'general'}
           onClick={() => selectMasterCategory('general')}
-        />
-        <MasterTile
-          icon={<Baby className="w-6 h-6" />}
-          label="Niños"
-          count={packsByCategory.ninos.length}
-          active={selectedMaster === 'ninos'}
-          onClick={() => selectMasterCategory('ninos')}
         />
         <MasterTile
           icon={<MapPin className="w-6 h-6" />}
