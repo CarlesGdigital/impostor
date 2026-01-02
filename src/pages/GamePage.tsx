@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { PageLayout } from "@/components/layout/PageLayout";
 import { Button } from "@/components/ui/button";
-import { CardReveal } from "@/components/game/CardReveal";
+import { CardFlip } from "@/components/game/CardFlip";
 import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import { PlayAgainButton } from "@/components/game/PlayAgainButton";
 import { useGameSession } from "@/hooks/useGameSession";
+import { useWordHistory } from "@/hooks/useWordHistory";
 
 export default function GamePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -25,10 +26,11 @@ export default function GamePage() {
   } = useGameSession({ sessionId } as any);
 
   const [currentIndex, setCurrentIndex] = useState(0);
-  // Nueva fase "start" entre el reparto y el resumen
   const [phase, setPhase] = useState<"pass" | "reveal" | "start" | "done">("pass");
-  // Estado para saber si la carta ha sido revelada (usuario puede pasar al siguiente)
   const [hasRevealedCard, setHasRevealedCard] = useState(false);
+
+  // Word history for preventing repetition
+  const { addToHistory } = useWordHistory();
 
   const currentPlayer = players[currentIndex];
   const isLastPlayer = currentIndex >= players.length - 1;
@@ -36,12 +38,13 @@ export default function GamePage() {
   const isTopo = useMemo(() => currentPlayer?.role === "topo", [currentPlayer]);
   const isDeceivedTopo = useMemo(() => currentPlayer?.role === "deceived_topo", [currentPlayer]);
 
-  // Multi-mode redirect: this page is only for single-player pass-the-phone
+  // No redirect needed - multiplayer removed
+  // Add card to history when game finishes to prevent repetition
   useEffect(() => {
-    if (session?.mode === 'multi') {
-      navigate('/');
+    if (phase === 'done' && session?.cardId) {
+      addToHistory(session.cardId);
     }
-  }, [session?.mode, navigate]);
+  }, [phase, session?.cardId, addToHistory]);
 
   // First speaker - use persisted random first speaker from database
   const firstPlayer = useMemo(() => {
@@ -322,7 +325,7 @@ export default function GamePage() {
   return (
     <PageLayout title={currentPlayer.displayName} showBack={false}>
       <div className="max-w-md mx-auto space-y-6">
-        <CardReveal
+        <CardFlip
           word={displayWord}
           clue={displayClue}
           isTopo={displayAsTopo}

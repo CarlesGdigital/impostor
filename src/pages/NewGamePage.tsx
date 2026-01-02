@@ -17,15 +17,13 @@ import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, X, Users, Smartphone, AlertTriangle, Save, WifiOff } from "lucide-react";
-import type { GameMode, GuestPlayer } from "@/types/game";
+import { Plus, X, AlertTriangle, Save, WifiOff } from "lucide-react";
+import type { GuestPlayer } from "@/types/game";
 import type { SavedRoom } from "@/types/savedRoom";
 
 export default function NewGamePage() {
-  const [searchParams] = useSearchParams();
-  const modeParam = searchParams.get("mode") as GameMode;
-
-  const [mode, setMode] = useState<GameMode>(modeParam || "single");
+  // Single mode only (multiplayer removed)
+  const mode = 'single' as const;
   const [topoCount, setTopoCount] = useState(1);
   const [players, setPlayers] = useState<GuestPlayer[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -297,8 +295,8 @@ export default function NewGamePage() {
     }
   };
 
-  const canCreate = (mode === "multi" || players.length >= minPlayers) && selectedPackIds.length > 0;
-  const topoWarning = mode === "single" && players.length > 0 && topoCount > Math.floor(players.length / 2);
+  const canCreate = players.length >= minPlayers && selectedPackIds.length > 0;
+  const topoWarning = players.length > 0 && topoCount > Math.floor(players.length / 2);
 
   return (
     <PageLayout
@@ -306,7 +304,7 @@ export default function NewGamePage() {
       footer={
         <div className="space-y-3">
           <Button onClick={handleCreateGame} disabled={!canCreate || creating} className="w-full h-16 text-xl font-bold">
-            {creating ? "Creando..." : mode === "multi" ? "Crear sala" : "Crear partida"}
+            {creating ? "Creando..." : "Crear partida"}
           </Button>
           {createError && (
             <div className="p-4 border-2 border-destructive bg-destructive/10 text-center space-y-2">
@@ -325,59 +323,23 @@ export default function NewGamePage() {
           <OfflineIndicator />
         </div>
 
-        {/* Offline warning for multi mode */}
-        {!isOnline && mode === "multi" && (
-          <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm">
-            <WifiOff className="h-4 w-4 text-destructive shrink-0" />
+        {/* Offline notice - just informative, game works offline */}
+        {!isOnline && (
+          <div className="flex items-center gap-2 p-3 bg-muted/50 border border-border rounded-lg text-sm">
+            <WifiOff className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-muted-foreground">
-              El modo multimóvil no está disponible sin conexión. Usa el modo "Un móvil".
+              Modo sin conexión. El juego funciona normalmente.
             </span>
           </div>
         )}
 
-        <div className="space-y-3">
-          <Label className="text-lg font-bold">Modo de juego</Label>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => setMode("single")}
-              className={cn(
-                "flex flex-col items-center gap-2 p-4 border-2 border-foreground text-center font-bold transition-colors",
-                mode === "single" ? "bg-foreground text-background" : "bg-card hover:bg-secondary",
-              )}
-            >
-              <Smartphone className="w-6 h-6" />
-              Un móvil
-            </button>
-            <button
-              onClick={() => setMode("multi")}
-              disabled={!isOnline}
-              className={cn(
-                "flex flex-col items-center gap-2 p-4 border-2 border-foreground text-center font-bold transition-colors",
-                mode === "multi" ? "bg-foreground text-background" : "bg-card hover:bg-secondary",
-                !isOnline && "opacity-50 cursor-not-allowed"
-              )}
-            >
-              <Users className="w-6 h-6" />
-              Multimóvil
-            </button>
-          </div>
-          {mode === "multi" && (
-            <p className="text-sm text-muted-foreground text-center">
-              Los jugadores se unirán con un código desde sus móviles
-            </p>
-          )}
-        </div>
-
         <PackSelector selectedPackIds={selectedPackIds} onSelectionChange={setSelectedPackIds} />
 
-        {/* Saved Rooms Selector - only for single mode */}
-        {mode === "single" && (
-          <SavedRoomSelector
-            mode={mode}
-            onSelectRoom={handleSelectSavedRoom}
-            selectedRoomId={selectedSavedRoom?.id}
-          />
-        )}
+        <SavedRoomSelector
+          mode={mode}
+          onSelectRoom={handleSelectSavedRoom}
+          selectedRoomId={selectedSavedRoom?.id}
+        />
 
         <div className="space-y-3">
           <Label className="text-lg font-bold">Número de topos</Label>
@@ -450,99 +412,76 @@ export default function NewGamePage() {
           </div>
         </div>
 
-        {mode === "single" && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label className="text-lg font-bold">
-                Jugadores ({players.length}/{maxPlayers})
-              </Label>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Users className="w-4 h-4" />
-                Mín. {minPlayers}
-              </div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Label className="text-lg font-bold">
+              Jugadores ({players.length}/{maxPlayers})
+            </Label>
+            <div className="text-sm text-muted-foreground">
+              Mín. {minPlayers}
             </div>
+          </div>
 
-            {players.length > 0 && (
-              <div className="space-y-2">
-                {players.map((player) => (
-                  <div key={player.id} className="flex items-center gap-3 p-3 border-2 border-foreground bg-card">
-                    <PlayerAvatar avatarKey={player.avatarKey} displayName={player.displayName} size="sm" />
-                    <span className="flex-1 font-bold truncate">{player.displayName}</span>
-                    <button
-                      onClick={() => handleRemovePlayer(player.id)}
-                      className="p-2 hover:bg-secondary transition-colors"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {showAddForm ? (
-              <div className="border-2 border-foreground p-4 bg-card">
-                <AddPlayerForm onAddPlayer={handleAddPlayer} onCancel={() => setShowAddForm(false)} />
-              </div>
-            ) : (
-              <Button
-                onClick={() => setShowAddForm(true)}
-                variant="outline"
-                className="w-full h-14 text-lg font-bold border-2 border-dashed"
-                disabled={players.length >= maxPlayers}
-              >
-                <Plus className="w-6 h-6 mr-2" />
-                Añadir jugador
-              </Button>
-            )}
-
-            {/* Save room option */}
-            {players.length >= minPlayers && (
-              <div className="space-y-3 p-4 border-2 border-border bg-card">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="save-room"
-                    checked={showSaveOption}
-                    onChange={(e) => setShowSaveOption(e.target.checked)}
-                    className="w-5 h-5"
-                  />
-                  <label htmlFor="save-room" className="flex items-center gap-2 font-bold cursor-pointer">
-                    <Save className="w-5 h-5" />
-                    Guardar sala para futuras partidas
-                  </label>
+          {players.length > 0 && (
+            <div className="space-y-2">
+              {players.map((player) => (
+                <div key={player.id} className="flex items-center gap-3 p-3 border-2 border-foreground bg-card">
+                  <PlayerAvatar avatarKey={player.avatarKey} displayName={player.displayName} size="sm" />
+                  <span className="flex-1 font-bold truncate">{player.displayName}</span>
+                  <button
+                    onClick={() => handleRemovePlayer(player.id)}
+                    className="p-2 hover:bg-secondary transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
-                {showSaveOption && (
-                  <Input
-                    placeholder="Nombre de la sala (ej: Familia, Amigos...)"
-                    value={roomName}
-                    onChange={(e) => setRoomName(e.target.value)}
-                    className="h-12"
-                  />
-                )}
-              </div>
-            )}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
 
-        {mode === "multi" && (
-          <div className="border-2 border-foreground bg-card p-6 space-y-4">
-            <h3 className="font-bold text-lg text-center">Cómo funciona</h3>
-            <ol className="space-y-3 text-sm text-muted-foreground">
-              <li className="flex gap-3">
-                <span className="font-bold text-foreground">1.</span> Crea la sala y comparte el código
-              </li>
-              <li className="flex gap-3">
-                <span className="font-bold text-foreground">2.</span> Cada jugador entra con su móvil
-              </li>
-              <li className="flex gap-3">
-                <span className="font-bold text-foreground">3.</span> Inicia el reparto cuando estén todos
-              </li>
-              <li className="flex gap-3">
-                <span className="font-bold text-foreground">4.</span> Cada uno ve su carta en su móvil
-              </li>
-            </ol>
-          </div>
-        )}
+          {showAddForm ? (
+            <div className="border-2 border-foreground p-4 bg-card">
+              <AddPlayerForm onAddPlayer={handleAddPlayer} onCancel={() => setShowAddForm(false)} />
+            </div>
+          ) : (
+            <Button
+              onClick={() => setShowAddForm(true)}
+              variant="outline"
+              className="w-full h-14 text-lg font-bold border-2 border-dashed"
+              disabled={players.length >= maxPlayers}
+            >
+              <Plus className="w-6 h-6 mr-2" />
+              Añadir jugador
+            </Button>
+          )}
+
+          {/* Save room option */}
+          {players.length >= minPlayers && (
+            <div className="space-y-3 p-4 border-2 border-border bg-card">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="save-room"
+                  checked={showSaveOption}
+                  onChange={(e) => setShowSaveOption(e.target.checked)}
+                  className="w-5 h-5"
+                />
+                <label htmlFor="save-room" className="flex items-center gap-2 font-bold cursor-pointer">
+                  <Save className="w-5 h-5" />
+                  Guardar sala para futuras partidas
+                </label>
+              </div>
+              {showSaveOption && (
+                <Input
+                  placeholder="Nombre de la sala (ej: Familia, Amigos...)"
+                  value={roomName}
+                  onChange={(e) => setRoomName(e.target.value)}
+                  className="h-12"
+                />
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </PageLayout>
   );

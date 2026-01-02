@@ -2,20 +2,23 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { Button } from '@/components/ui/button';
+import { QuickAddWordDialog } from '@/components/words/QuickAddWordDialog';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useSavedRooms } from '@/hooks/useSavedRooms';
 import { cn } from '@/lib/utils';
-import { Users, Smartphone, UserCircle, LogIn, Settings, FolderOpen, BookOpen } from 'lucide-react';
+import { Smartphone, UserCircle, LogIn, Settings, FolderOpen, BookOpen, PlusCircle } from 'lucide-react';
 import type { GameMode } from '@/types/game';
 
 const Index = () => {
-  const [selectedMode, setSelectedMode] = useState<GameMode>('single');
+  const [showAddWord, setShowAddWord] = useState(false);
   const { user } = useAuth();
   const { isAdmin } = useUserRole();
   const { rooms, setActiveRoom } = useSavedRooms();
   const navigate = useNavigate();
 
+  // Single mode only now (multiplayer removed)
+  const selectedMode: GameMode = 'single';
   const savedRoomsForMode = rooms.filter(r => r.mode === selectedMode);
 
   return (
@@ -27,48 +30,14 @@ const Index = () => {
           <p className="text-xl text-muted-foreground">El juego del impostor</p>
         </div>
 
-        {/* Mode selector */}
-        <div className="w-full space-y-3">
-          <p className="text-sm font-bold text-muted-foreground uppercase tracking-wide text-center">
-            Modo de juego
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => setSelectedMode('single')}
-              className={cn(
-                'flex flex-col items-center gap-3 p-6 border-2 border-foreground transition-all',
-                selectedMode === 'single'
-                  ? 'bg-foreground text-background shadow-md'
-                  : 'bg-card hover:bg-secondary'
-              )}
-            >
-              <Smartphone className="w-10 h-10" />
-              <span className="font-bold text-lg">Un móvil</span>
-              <span className={cn(
-                'text-xs',
-                selectedMode === 'single' ? 'text-background/70' : 'text-muted-foreground'
-              )}>
-                Pasar y jugar
-              </span>
-            </button>
-            <button
-              onClick={() => setSelectedMode('multi')}
-              className={cn(
-                'flex flex-col items-center gap-3 p-6 border-2 border-foreground transition-all',
-                selectedMode === 'multi'
-                  ? 'bg-foreground text-background shadow-md'
-                  : 'bg-card hover:bg-secondary'
-              )}
-            >
-              <Users className="w-10 h-10" />
-              <span className="font-bold text-lg">Multimóvil</span>
-              <span className={cn(
-                'text-xs',
-                selectedMode === 'multi' ? 'text-background/70' : 'text-muted-foreground'
-              )}>
-                Cada uno con su móvil
-              </span>
-            </button>
+        {/* Single mode info */}
+        <div className="w-full text-center">
+          <div className="flex flex-col items-center gap-3 p-6 border-2 border-foreground bg-foreground text-background">
+            <Smartphone className="w-10 h-10" />
+            <span className="font-bold text-lg">Un móvil</span>
+            <span className="text-xs text-background/70">
+              Pasar y jugar
+            </span>
           </div>
         </div>
 
@@ -82,19 +51,19 @@ const Index = () => {
             Nueva partida
           </Button>
 
-          {selectedMode === 'multi' && (
-            <Button
-              onClick={() => navigate('/join')}
-              variant="outline"
-              className="w-full h-16 text-xl font-bold border-2"
-              size="lg"
-            >
-              Unirse con código
-            </Button>
-          )}
+          {/* Quick add word button */}
+          <Button
+            onClick={() => setShowAddWord(true)}
+            variant="outline"
+            className="w-full h-14 text-lg font-bold border-2 gap-2"
+            size="lg"
+          >
+            <PlusCircle className="w-5 h-5" />
+            Añadir palabras
+          </Button>
 
           {/* Saved rooms quick access */}
-          {savedRoomsForMode.length > 0 && selectedMode === 'single' && (
+          {savedRoomsForMode.length > 0 && (
             <div className="pt-2">
               <p className="text-sm text-muted-foreground text-center mb-2">Salas guardadas</p>
               <div className="space-y-2">
@@ -183,6 +152,7 @@ const Index = () => {
           </a>
         </p>
       </div>
+      <QuickAddWordDialog open={showAddWord} onOpenChange={setShowAddWord} />
     </PageLayout>
   );
 };
