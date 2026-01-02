@@ -301,17 +301,17 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       dealingRequested,
     });
 
-    // Set 10 second timeout
+    // Set 5 second timeout (reduced for better UX)
     const timeoutId = window.setTimeout(() => {
       console.warn('[useGameSession] TIMEOUT waiting assignment', {
         sessionId: session.id,
         status: session.status,
         dealingRequested,
       });
-      setError('Timeout: El servidor no responde. Pulse "Reintentar asignación" para volver a intentarlo.');
+      setError('Timeout: El servidor no responde. Reintenta la partida.');
       setWaitingForAssignment(false);
       setDealingRequested(false);
-    }, 10000);
+    }, 5000);
 
     return () => {
       clearTimeout(timeoutId);
@@ -351,7 +351,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         return null;
       }
 
-      const offlineCard = getRandomOfflineCard(selectedPackIds, excludeCardId);
+      const offlineCard = getRandomOfflineCard(selectedPackIds, excludeCardId ? [excludeCardId] : []);
       
       if (!offlineCard) {
         console.error('[createSession] OFFLINE FAIL: No cards available for selected packs');
@@ -660,7 +660,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
           // OFFLINE: Get from cached cards
           const packIds = session.selectedPackIds || [];
           if (packIds.length > 0) {
-            const offlineCard = getRandomOfflineCard(packIds, session.cardId || undefined);
+            const offlineCard = getRandomOfflineCard(packIds, session.cardId ? [session.cardId] : []);
             if (offlineCard) {
               deceivedWordText = offlineCard.word;
               deceivedClueText = offlineCard.clue;

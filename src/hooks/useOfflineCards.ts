@@ -101,34 +101,57 @@ export function useOfflineCards() {
   }, []);
 
   // Get a random card from offline storage
+  // selectedPackIds: array of pack IDs OR master category slugs like ['general', 'benicolet', 'picantes']
+  // excludeCardIds: array of card IDs to exclude from selection (recent history)
   const getRandomOfflineCard = useCallback((
     selectedPackIds: string[],
-    excludeCardId?: string
+    excludeCardIds: string[] = []
   ): OfflineCard | null => {
     const allCards = getOfflineCards();
+    const allPacks = getOfflinePacks();
     
-    // Filter by selected packs
-    let candidates = allCards.filter(card => selectedPackIds.includes(card.pack_id));
+    // Determine if we're filtering by master category slugs or pack IDs
+    const masterCategorySlugs = ['general', 'benicolet', 'picantes'];
+    const isMasterCategoryFilter = selectedPackIds.every(id => masterCategorySlugs.includes(id));
+    
+    let validPackIds: string[];
+    
+    if (isMasterCategoryFilter) {
+      // Filter packs by master category
+      validPackIds = allPacks
+        .filter(pack => selectedPackIds.includes(pack.master_category || 'general'))
+        .map(pack => pack.id);
+    } else {
+      // Use pack IDs directly
+      validPackIds = selectedPackIds;
+    }
     
     console.info('[useOfflineCards] getRandomOfflineCard', {
       totalCards: allCards.length,
-      selectedPacks: selectedPackIds.length,
-      candidatesBeforeExclusion: candidates.length,
-      excludeCardId
+      selectedPackIds: selectedPackIds.length,
+      validPackIds: validPackIds.length,
+      isMasterCategoryFilter,
+      excludeCardIds: excludeCardIds.length
     });
 
-    // Exclude previous card if there are alternatives
-    if (excludeCardId && candidates.length > 1) {
-      candidates = candidates.filter(card => card.id !== excludeCardId);
-      console.info('[useOfflineCards] Excluded previous card, remaining:', candidates.length);
+    // Filter by valid packs
+    let candidates = allCards.filter(card => validPackIds.includes(card.pack_id));
+    
+    console.info('[useOfflineCards] Candidates before exclusion:', candidates.length);
+
+    // Exclude recently used cards if there are alternatives
+    if (excludeCardIds.length > 0 && candidates.length > excludeCardIds.length) {
+      const originalCount = candidates.length;
+      candidates = candidates.filter(card => !excludeCardIds.includes(card.id));
+      console.info('[useOfflineCards] Excluded recent cards:', originalCount - candidates.length, 'remaining:', candidates.length);
     }
 
     if (candidates.length === 0) {
-      console.warn('[useOfflineCards] No offline cards available');
+      console.warn('[useOfflineCards] No offline cards available for packs:', validPackIds.slice(0, 5));
       return null;
     }
 
-    // Random selection
+    // True random selection
     const randomIndex = Math.floor(Math.random() * candidates.length);
     const selected = candidates[randomIndex];
 
@@ -139,7 +162,7 @@ export function useOfflineCards() {
     });
 
     return selected;
-  }, [getOfflineCards]);
+  }, [getOfflineCards, getOfflinePacks]);
 
   // Check if we have offline data
   const hasOfflineData = useCallback((): boolean => {
