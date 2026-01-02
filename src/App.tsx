@@ -8,11 +8,7 @@ import Index from "./pages/Index";
 import AuthPage from "./pages/AuthPage";
 import ProfilePage from "./pages/ProfilePage";
 import NewGamePage from "./pages/NewGamePage";
-import JoinGamePage from "./pages/JoinGamePage";
-import JoinWithCodePage from "./pages/JoinWithCodePage";
-import LobbyPage from "./pages/LobbyPage";
 import GamePage from "./pages/GamePage";
-import PlayPage from "./pages/PlayPage";
 import WordsPage from "./pages/WordsPage";
 import AdminPage from "./pages/AdminPage";
 import AdminWordsPage from "./pages/AdminWordsPage";
@@ -35,11 +31,7 @@ const App = () => (
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/new-game" element={<NewGamePage />} />
-            <Route path="/join" element={<JoinGamePage />} />
-            <Route path="/join/:code" element={<JoinWithCodePage />} />
-            <Route path="/lobby/:sessionId" element={<LobbyPage />} />
             <Route path="/game/:sessionId" element={<GamePage />} />
-            <Route path="/play/:sessionId/:playerId" element={<PlayPage />} />
             <Route path="/words" element={<WordsPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/admin/words" element={<AdminWordsPage />} />
