@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 
 const WORD_HISTORY_KEY = 'impostor:word_history';
-const MAX_HISTORY_SIZE = 5;
+const MAX_HISTORY_SIZE = 10; // Keep last 10 cards to avoid repetition
 
 /**
  * Hook to manage word history to prevent repetition across games.

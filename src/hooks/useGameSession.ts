@@ -606,11 +606,13 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       return false;
     }
 
+    const isOfflineSession = session.id.startsWith('offline-');
     console.info('[startDealing] begin (word already preloaded)', {
       sessionId: session.id,
       status: session.status,
       playersCount: players.length,
       word: session.wordText,
+      offline: isOfflineSession,
     });
 
     setLoading(true);
@@ -621,7 +623,6 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     try {
       // Read variant from localStorage
       const variant = localStorage.getItem(`impostor:variant:${session.id}`) || 'classic';
-      const isOfflineSession = session.id.startsWith('offline-');
       console.info('[startDealing] Variant:', variant, 'Offline:', isOfflineSession);
 
       // TRUE RANDOM: Fisher-Yates shuffle for unbiased randomization
@@ -654,46 +655,60 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         
         console.info('[startDealing] Double topo mode:', { realTopoId, deceivedTopoId });
 
-        // Get alternative word for deceived topo from same packs
-        const packIds = session.selectedPackIds || [];
-        if (packIds.length > 0) {
-          // Shuffle packs and try to find a different card
-          const shuffledPacks = shuffleArray(packIds);
-          
-          for (const packChunk of [shuffledPacks.slice(0, 50)]) {
-            const { count } = await supabase
-              .from('cards')
-              .select('id', { count: 'exact', head: true })
-              .in('pack_id', packChunk)
-              .neq('is_active', false)
-              .neq('id', session.cardId || ''); // Exclude real word
-
-            if (count && count > 0) {
-              const randomOffset = Math.floor(Math.random() * count);
-              const { data: altCard } = await supabase
+        // Get alternative word for deceived topo
+        if (isOfflineSession) {
+          // OFFLINE: Get from cached cards
+          const packIds = session.selectedPackIds || [];
+          if (packIds.length > 0) {
+            const offlineCard = getRandomOfflineCard(packIds, session.cardId || undefined);
+            if (offlineCard) {
+              deceivedWordText = offlineCard.word;
+              deceivedClueText = offlineCard.clue;
+              console.info('[startDealing] OFFLINE alt word for deceived:', deceivedWordText);
+            }
+          }
+        } else {
+          // ONLINE: Get from database
+          const packIds = session.selectedPackIds || [];
+          if (packIds.length > 0) {
+            // Shuffle packs and try to find a different card
+            const shuffledPacks = shuffleArray(packIds);
+            
+            for (const packChunk of [shuffledPacks.slice(0, 50)]) {
+              const { count } = await supabase
                 .from('cards')
-                .select('word, clue')
+                .select('id', { count: 'exact', head: true })
                 .in('pack_id', packChunk)
                 .neq('is_active', false)
-                .neq('id', session.cardId || '')
-                .range(randomOffset, randomOffset)
-                .maybeSingle();
+                .neq('id', session.cardId || ''); // Exclude real word
 
-              if (altCard) {
-                deceivedWordText = altCard.word;
-                deceivedClueText = altCard.clue;
-                console.info('[startDealing] Alternative word for deceived:', deceivedWordText);
-                break;
+              if (count && count > 0) {
+                const randomOffset = Math.floor(Math.random() * count);
+                const { data: altCard } = await supabase
+                  .from('cards')
+                  .select('word, clue')
+                  .in('pack_id', packChunk)
+                  .neq('is_active', false)
+                  .neq('id', session.cardId || '')
+                  .range(randomOffset, randomOffset)
+                  .maybeSingle();
+
+                if (altCard) {
+                  deceivedWordText = altCard.word;
+                  deceivedClueText = altCard.clue;
+                  console.info('[startDealing] Alternative word for deceived:', deceivedWordText);
+                  break;
+                }
               }
             }
           }
+        }
 
-          // Fallback: if no alt word found, use a placeholder
-          if (!deceivedWordText) {
-            deceivedWordText = 'Objeto misterioso';
-            deceivedClueText = 'Algo que no es lo que parece';
-            console.warn('[startDealing] No alt word found, using fallback');
-          }
+        // Fallback: if no alt word found, use a placeholder
+        if (!deceivedWordText) {
+          deceivedWordText = 'Objeto misterioso';
+          deceivedClueText = 'Algo que no es lo que parece';
+          console.warn('[startDealing] No alt word found, using fallback');
         }
       } else {
         effectiveTopoCount = session.topoCount;
@@ -782,35 +797,58 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         updateData.clue_text = clueTextOverride;
       }
 
-      // Persist double_topo data in database for stability on reload
+      // Persist double_topo data for stability on reload
       if (variant === 'double_topo' && deceivedTopoId) {
         updateData.deceived_topo_player_id = deceivedTopoId;
         updateData.deceived_word_text = deceivedWordText;
         updateData.deceived_clue_text = deceivedClueText;
       }
 
-      const { data: updatedSessionData, error: updateError } = await supabase
-        .from('game_sessions')
-        .update(updateData)
-        .eq('id', session.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        console.error('[startDealing] Error updating session status:', updateError);
-        setError('Error al iniciar el reparto');
-        return false;
-      }
-
-      if (updatedSessionData) {
-        setSession(mapSession(updatedSessionData));
+      if (isOfflineSession) {
+        // OFFLINE: Update local session
+        const updatedOfflineSession: GameSession = {
+          ...session,
+          status: 'dealing',
+          firstSpeakerPlayerId: randomFirstSpeaker,
+          wordText: wordTextOverride || session.wordText,
+          clueText: clueTextOverride || session.clueText,
+          deceivedTopoPlayerId: deceivedTopoId,
+          deceivedWordText: deceivedWordText,
+          deceivedClueText: deceivedClueText,
+        };
+        localStorage.setItem(`impostor:offline_session:${session.id}`, JSON.stringify(updatedOfflineSession));
+        setSession(updatedOfflineSession);
         setLocalFirstSpeakerId(randomFirstSpeaker);
-        console.info('[startDealing] end - SUCCESS', {
+        console.info('[startDealing] OFFLINE end - SUCCESS', {
           sessionId: session.id,
-          status: updatedSessionData.status,
           variant,
           firstSpeaker: randomFirstSpeaker,
         });
+      } else {
+        // ONLINE: Update database
+        const { data: updatedSessionData, error: updateError } = await supabase
+          .from('game_sessions')
+          .update(updateData)
+          .eq('id', session.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error('[startDealing] Error updating session status:', updateError);
+          setError('Error al iniciar el reparto');
+          return false;
+        }
+
+        if (updatedSessionData) {
+          setSession(mapSession(updatedSessionData));
+          setLocalFirstSpeakerId(randomFirstSpeaker);
+          console.info('[startDealing] end - SUCCESS', {
+            sessionId: session.id,
+            status: updatedSessionData.status,
+            variant,
+            firstSpeaker: randomFirstSpeaker,
+          });
+        }
       }
 
       setDealingRequested(false);
@@ -827,8 +865,26 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
 
   const markPlayerRevealed = async (playerId: string): Promise<boolean> => {
     console.info('[markPlayerRevealed] Starting', { playerId, sessionId: session?.id });
+    const isOfflineSession = session?.id?.startsWith('offline-');
 
     try {
+      if (isOfflineSession) {
+        // OFFLINE: Update local state only
+        setPlayers(prev =>
+          prev.map(p =>
+            p.id === playerId ? { ...p, hasRevealed: true } : p
+          )
+        );
+        // Also update localStorage
+        const updatedPlayers = players.map(p =>
+          p.id === playerId ? { ...p, hasRevealed: true } : p
+        );
+        localStorage.setItem(`impostor:offline_players:${session?.id}`, JSON.stringify(updatedPlayers));
+        console.info('[markPlayerRevealed] OFFLINE OK', { playerId });
+        return true;
+      }
+
+      // ONLINE: Update database
       const { error } = await supabase
         .from('session_players')
         .update({ has_revealed: true })
@@ -857,11 +913,20 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
 
   const finishDealing = async () => {
     if (!session) return;
+    const isOfflineSession = session.id.startsWith('offline-');
 
-    await supabase
-      .from('game_sessions')
-      .update({ status: 'finished' })
-      .eq('id', session.id);
+    if (isOfflineSession) {
+      // OFFLINE: Update local session
+      const updatedSession = { ...session, status: 'finished' as const };
+      localStorage.setItem(`impostor:offline_session:${session.id}`, JSON.stringify(updatedSession));
+      setSession(updatedSession);
+    } else {
+      // ONLINE: Update database
+      await supabase
+        .from('game_sessions')
+        .update({ status: 'finished' })
+        .eq('id', session.id);
+    }
   };
 
   // Transition to discussion phase (host only for multiplayer)
