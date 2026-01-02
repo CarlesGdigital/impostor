@@ -20,10 +20,8 @@ export default function GamePage() {
     startDealing,
     loading,
     error,
-    waitingForAssignment,
-    dealingRequested,
     isReadyForDealing,
-  } = useGameSession({ sessionId } as any);
+  } = useGameSession({ sessionId });
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [phase, setPhase] = useState<"pass" | "reveal" | "start" | "done">("pass");
@@ -188,10 +186,10 @@ export default function GamePage() {
   // Pantalla de "pasar el móvil"
   if (phase === "pass") {
     // Can we start dealing?
-    const canStartDealing = isReadyForDealing && !loading && !waitingForAssignment && !dealingRequested;
+    const canStartDealing = isReadyForDealing && !loading;
 
     // Is dealing in progress?
-    const isDealingInProgress = loading || dealingRequested || waitingForAssignment;
+    const isDealingInProgress = loading;
 
     // Mode single doesn't need "host" terminology
     const isSingleMode = session?.mode === "single";
@@ -257,12 +255,7 @@ export default function GamePage() {
                   </Button>
                 </div>
               ) : isDealingInProgress ? (
-                <>
-                  <p className="text-sm text-muted-foreground">Asignando carta...</p>
-                  {waitingForAssignment && (
-                    <p className="text-xs text-muted-foreground/70">Esperando respuesta del servidor...</p>
-                  )}
-                </>
+                <p className="text-sm text-muted-foreground">Asignando carta...</p>
               ) : canStartDealing ? (
                 <p className="text-sm text-muted-foreground">
                   {isSingleMode ? "Pulse 'Iniciar reparto' para comenzar." : "Listo para iniciar el reparto."}

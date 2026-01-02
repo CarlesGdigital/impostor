@@ -138,31 +138,14 @@ export default function NewGamePage() {
     setCreateError(null);
     console.info('[NewGame] create begin', { mode, topoCount, playerCount: players.length });
 
-    // Timeout mechanism: abort if operation takes too long
-    let timeoutTriggered = false;
-    const timeoutId = setTimeout(() => {
-      timeoutTriggered = true;
-      console.error('[NewGame] create TIMEOUT after', CREATION_TIMEOUT_MS, 'ms');
-      setCreating(false);
-      setCreateError('Timeout: La creación tardó demasiado. Pulse Reintentar.');
-      toast.error('Tiempo de espera agotado');
-    }, CREATION_TIMEOUT_MS);
-
     try {
       const excludeCardIds = getExcludeCardIds();
-      console.info('[NewGame] calling createSession', { excludeCardIds: excludeCardIds.length });
       const session = await createSession(mode, topoCount, user?.id, !user ? guestId : undefined, selectedPackIds, excludeCardIds[0]);
 
-      // If timeout already triggered, abort
-      if (timeoutTriggered) {
-        console.warn('[NewGame] Timeout already triggered, aborting');
-        return;
-      }
-
       if (!session) {
-        console.error('[NewGame] createSession returned null');
         setCreateError('No se pudo crear la partida. Reintente.');
         toast.error("Error al crear la partida");
+        setCreating(false);
         return;
       }
       console.info('[NewGame] session created', { sessionId: session.id });
@@ -192,122 +175,50 @@ export default function NewGamePage() {
         toast.success('Sala guardada');
       }
 
-      if (mode === "single") {
-        // Check if offline session (id starts with "offline-")
-        const isOfflineSession = session.id.startsWith('offline-');
-        
-        if (isOfflineSession) {
-          // Offline mode: Store players in localStorage instead of database
-          console.info('[NewGame] OFFLINE: Storing players locally');
-          const offlinePlayers = players.map((player, i) => ({
-            id: `offline-player-${i}`,
-            sessionId: session.id,
-            userId: null,
-            guestId: player.id,
-            displayName: player.displayName,
-            gender: player.gender,
-            avatarKey: player.avatarKey,
-            photoUrl: null,
-            role: null,
-            hasRevealed: false,
-            turnOrder: i,
-          }));
-          localStorage.setItem(`impostor:offline_players:${session.id}`, JSON.stringify(offlinePlayers));
-        } else {
-          // Online mode: Insert players into database
-          for (let i = 0; i < players.length; i++) {
-            const player = players[i];
-            console.info('[Supabase] insert session_player', { index: i, displayName: player.displayName });
-
-            const { error: insertError } = await supabase.from("session_players").insert({
-              session_id: session.id,
-              guest_id: player.id,
-              display_name: player.displayName,
-              gender: player.gender,
-              avatar_key: player.avatarKey,
-              turn_order: i,
-            });
-
-            if (insertError) {
-              console.error('[Supabase] insert session_player error', { index: i, error: insertError });
-              throw new Error(`Error al añadir jugador ${player.displayName}`);
-            }
-            console.info('[Supabase] insert session_player ok', { index: i });
-          }
-        }
-
-        console.info('[Router] navigating to game', { sessionId: session.id });
-        navigate(`/game/${session.id}`);
+      // Check if offline session (id starts with "offline-")
+      const isOfflineSession = session.id.startsWith('offline-');
+      
+      if (isOfflineSession) {
+        // Offline mode: Store players in localStorage instead of database
+        console.info('[NewGame] OFFLINE: Storing players locally');
+        const offlinePlayers = players.map((player, i) => ({
+          id: `offline-player-${i}`,
+          sessionId: session.id,
+          userId: null,
+          guestId: player.id,
+          displayName: player.displayName,
+          gender: player.gender,
+          avatarKey: player.avatarKey,
+          photoUrl: null,
+          role: null,
+          hasRevealed: false,
+          turnOrder: i,
+        }));
+        localStorage.setItem(`impostor:offline_players:${session.id}`, JSON.stringify(offlinePlayers));
       } else {
-        // Multiplayer: Add host as first player
-        let hostPlayerData: {
-          session_id: string;
-          user_id: string | null;
-          guest_id: string | null;
-          display_name: string;
-          gender: string;
-          avatar_key: string;
-          photo_url: string | null;
-          turn_order: number;
-        } = {
-          session_id: session.id,
-          user_id: user?.id || null,
-          guest_id: !user ? guestId : null,
-          display_name: 'Anfitrión',
-          gender: 'other',
-          avatar_key: 'default',
-          photo_url: null,
-          turn_order: 0,
-        };
-
-        // Try to fetch profile for authenticated users
-        if (user?.id) {
-          console.info('[Supabase] fetching profile for host');
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('display_name, gender, avatar_key, photo_url')
-            .eq('id', user.id)
-            .single();
-
-          if (profile) {
-            hostPlayerData = {
-              ...hostPlayerData,
-              display_name: profile.display_name || 'Anfitrión',
-              gender: profile.gender || 'other',
-              avatar_key: profile.avatar_key || 'default',
-              photo_url: profile.photo_url || null,
-            };
-          }
-        }
-
-        console.info('[Supabase] insert host player');
-        const { error: hostInsertError } = await supabase.from('session_players').insert(hostPlayerData);
-
-        if (hostInsertError) {
-          console.error('[Supabase] insert host player error', hostInsertError);
-          throw new Error('Error al registrar al anfitrión en la sala');
-        }
-        console.info('[Supabase] insert host player ok');
-
-        console.info('[Router] navigating to lobby', { sessionId: session.id });
-        navigate(`/lobby/${session.id}`);
+        // Online mode: Insert players into database in parallel
+        await Promise.all(players.map((player, i) =>
+          supabase.from("session_players").insert({
+            session_id: session.id,
+            guest_id: player.id,
+            display_name: player.displayName,
+            gender: player.gender,
+            avatar_key: player.avatarKey,
+            turn_order: i,
+          })
+        ));
       }
 
+      console.info('[Router] navigating to game', { sessionId: session.id });
+      navigate(`/game/${session.id}`);
       toast.success("¡Partida creada!");
-      console.info('[NewGame] create end - SUCCESS');
 
     } catch (e: any) {
       console.error('[NewGame] create error', e);
-      if (!timeoutTriggered) {
-        setCreateError(e.message || 'Error desconocido al crear la partida.');
-        toast.error(e.message || "Error al crear la partida");
-      }
+      setCreateError(e.message || 'Error desconocido al crear la partida.');
+      toast.error(e.message || "Error al crear la partida");
     } finally {
-      clearTimeout(timeoutId);
-      if (!timeoutTriggered) {
-        setCreating(false);
-      }
-      console.info('[NewGame] create end - finally');
+      setCreating(false);
     }
   };
 
