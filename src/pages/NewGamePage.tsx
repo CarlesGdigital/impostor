@@ -12,6 +12,7 @@ import { OfflineIndicator } from "@/components/game/OfflineIndicator";
 import { useAuth } from "@/hooks/useAuth";
 import { useGuestId } from "@/hooks/useGuestId";
 import { useGameSession } from "@/hooks/useGameSession";
+import { useWordHistory } from "@/hooks/useWordHistory";
 import { useSavedRooms } from "@/hooks/useSavedRooms";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,13 +36,14 @@ export default function NewGamePage() {
   const [roomName, setRoomName] = useState('');
   const [showSaveOption, setShowSaveOption] = useState(true);
 
-  const CREATION_TIMEOUT_MS = 10000; // 10 seconds
+  const CREATION_TIMEOUT_MS = 5000; // 5 seconds (reduced for better UX)
 
   const { user } = useAuth();
   const guestId = useGuestId();
   const { createSession } = useGameSession();
   const { createRoom, updateRoom, getRoomById } = useSavedRooms();
   const { isOnline } = useOnlineStatus();
+  const { getExcludedCardIds, addToHistory } = useWordHistory();
   const navigate = useNavigate();
 
   const minPlayers = 3;
@@ -81,15 +83,23 @@ export default function NewGamePage() {
     }
   }, [mode, getRoomById]);
 
-  // Get previous card ID for exclusion (set by PlayAgainButton)
-  const getPreviousCardId = (): string | undefined => {
-    const id = localStorage.getItem('impostor:previous_card_id');
-    if (id) {
+  // Get card IDs to exclude from selection (from word history + previous game)
+  const getExcludeCardIds = (): string[] => {
+    const historyIds = getExcludedCardIds();
+    
+    // Also check for immediate previous card (from play again)
+    const previousCardId = localStorage.getItem('impostor:previous_card_id');
+    if (previousCardId) {
       localStorage.removeItem('impostor:previous_card_id');
-      console.info('[NewGame] Retrieved previous card ID for exclusion:', id);
-      return id;
+      console.info('[NewGame] Retrieved previous card ID for exclusion:', previousCardId);
+      // Add to list if not already there
+      if (!historyIds.includes(previousCardId)) {
+        return [previousCardId, ...historyIds];
+      }
     }
-    return undefined;
+    
+    console.info('[NewGame] Excluding card IDs from history:', historyIds.length);
+    return historyIds;
   };
 
   const handleSelectSavedRoom = (room: SavedRoom | null) => {
@@ -139,9 +149,9 @@ export default function NewGamePage() {
     }, CREATION_TIMEOUT_MS);
 
     try {
-      const previousCardId = getPreviousCardId();
-      console.info('[NewGame] calling createSession', { previousCardId });
-      const session = await createSession(mode, topoCount, user?.id, !user ? guestId : undefined, selectedPackIds, previousCardId);
+      const excludeCardIds = getExcludeCardIds();
+      console.info('[NewGame] calling createSession', { excludeCardIds: excludeCardIds.length });
+      const session = await createSession(mode, topoCount, user?.id, !user ? guestId : undefined, selectedPackIds, excludeCardIds[0]);
 
       // If timeout already triggered, abort
       if (timeoutTriggered) {
@@ -156,6 +166,12 @@ export default function NewGamePage() {
         return;
       }
       console.info('[NewGame] session created', { sessionId: session.id });
+
+      // Add card to history to prevent repetition
+      if (session.cardId) {
+        addToHistory(session.cardId);
+        console.info('[NewGame] Added card to history:', session.cardId);
+      }
 
       // Store variant in localStorage
       localStorage.setItem(`impostor:variant:${session.id}`, variant);
