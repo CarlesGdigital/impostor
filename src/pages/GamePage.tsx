@@ -102,8 +102,8 @@ export default function GamePage() {
     
     return (
       <PageLayout title="Resumen" showBack={false}>
-        <div className="max-w-md mx-auto space-y-8 text-center">
-          <div className="text-6xl">🎭</div>
+        <div className="max-w-md mx-auto space-y-8 text-center animate-fade-in">
+          <div className="text-6xl animate-scale-in">🎭</div>
           
           {/* Real Topo(s) */}
           <div className="space-y-2">
@@ -154,8 +154,8 @@ export default function GamePage() {
 
     return (
       <PageLayout title="Empieza la partida" showBack={false}>
-        <div className="max-w-md mx-auto flex flex-col items-center justify-center min-h-[60vh] gap-8 text-center">
-          <div className="text-6xl">🎮</div>
+        <div className="max-w-md mx-auto flex flex-col items-center justify-center min-h-[60vh] gap-8 text-center animate-fade-in">
+          <div className="text-6xl animate-scale-in">🎮</div>
 
           {firstPlayer && (
             <PlayerAvatar
@@ -241,7 +241,7 @@ export default function GamePage() {
 
     return (
       <PageLayout title={`Jugador ${currentIndex + 1}/${players.length}`} showBack={false}>
-        <div className="max-w-md mx-auto flex flex-col items-center justify-center min-h-[60vh] gap-8">
+        <div className="max-w-md mx-auto flex flex-col items-center justify-center min-h-[60vh] gap-8 animate-fade-in">
           <PlayerAvatar avatarKey={currentPlayer.avatarKey} displayName={currentPlayer.displayName} size="xl" />
           <h2 className="text-3xl font-bold text-center">Pase el móvil a</h2>
           <p className="text-5xl font-bold">{currentPlayer.displayName}</p>

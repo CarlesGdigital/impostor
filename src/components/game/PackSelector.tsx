@@ -1,7 +1,4 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -244,44 +241,14 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
         />
       </div>
 
-      <div className="bg-card border rounded-lg p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Se usarán <span className="font-bold text-foreground">{selectedPackIds.length}</span> packs de esta sección.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {currentCategoryPacks.length > 0 && selectedPackIds.length === 0 && 'Ninguno seleccionado'}
-          </p>
-        </div>
-
-        <Accordion type="single" collapsible>
-          <AccordionItem value="details" className="border-0">
-            <AccordionTrigger className="py-2 text-sm hover:no-underline hover:bg-muted/50 rounded px-2">
-              Ver categorías incluidas
-            </AccordionTrigger>
-            <AccordionContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2">
-                {currentCategoryPacks.map((pack) => (
-                  <div key={pack.id} className="flex items-center gap-2 p-2 rounded hover:bg-muted/50">
-                    <Checkbox
-                      id={pack.id}
-                      checked={selectedPackIds.includes(pack.id)}
-                      onCheckedChange={() => handleTogglePack(pack.id)}
-                    />
-                    <Label htmlFor={pack.id} className="cursor-pointer flex-1 text-sm">
-                      {pack.name}
-                    </Label>
-                  </div>
-                ))}
-                {currentCategoryPacks.length === 0 && (
-                  <div className="col-span-2 text-center py-4 text-muted-foreground text-sm">
-                    No hay packs en esta sección.
-                  </div>
-                )}
-              </div>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
+      {/* Summary - simplified, no accordion */}
+      <div className="bg-card border rounded-lg p-4">
+        <p className="text-sm text-muted-foreground text-center">
+          <span className="font-bold text-foreground">{selectedPackIds.length}</span> packs seleccionados
+          {selectedPackIds.length === 0 && currentCategoryPacks.length > 0 && (
+            <span className="text-destructive"> (selecciona al menos una categoría)</span>
+          )}
+        </p>
       </div>
     </div>
   );
@@ -305,7 +272,8 @@ function MasterTile({ icon, label, count, active, onClick, variant = 'default', 
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all relative overflow-hidden h-24",
+        "flex flex-col items-center justify-center p-3 rounded-xl border-2 relative overflow-hidden h-24",
+        "transition-all duration-200 ease-out active:scale-95",
         active
           ? isSpicy 
             ? "border-destructive bg-destructive/10 shadow-md scale-[1.02]"
@@ -316,7 +284,10 @@ function MasterTile({ icon, label, count, active, onClick, variant = 'default', 
       )}
     >
       {active && (
-        <div className={cn("absolute top-1 right-1", isSpicy ? "text-destructive" : "text-primary")}>
+        <div className={cn(
+          "absolute top-1 right-1 transition-transform duration-200",
+          isSpicy ? "text-destructive" : "text-primary"
+        )}>
           <Check className="w-4 h-4" />
         </div>
       )}
@@ -325,10 +296,16 @@ function MasterTile({ icon, label, count, active, onClick, variant = 'default', 
           {badge}
         </div>
       )}
-      <div className={cn("mb-2", active ? (isSpicy ? "text-destructive" : "text-primary") : "text-muted-foreground")}>
+      <div className={cn(
+        "mb-2 transition-colors duration-200",
+        active ? (isSpicy ? "text-destructive" : "text-primary") : "text-muted-foreground"
+      )}>
         {icon}
       </div>
-      <span className={cn("font-bold text-sm", active ? "text-foreground" : "text-muted-foreground")}>
+      <span className={cn(
+        "font-bold text-sm transition-colors duration-200",
+        active ? "text-foreground" : "text-muted-foreground"
+      )}>
         {label}
       </span>
     </button>

@@ -303,7 +303,7 @@ export default function NewGamePage() {
       title="Nueva partida"
       footer={
         <div className="space-y-3">
-          <Button onClick={handleCreateGame} disabled={!canCreate || creating} className="w-full h-16 text-xl font-bold">
+          <Button onClick={handleCreateGame} disabled={!canCreate || creating} className="w-full h-16 text-xl font-bold transition-transform duration-200 active:scale-95">
             {creating ? "Creando..." : "Crear partida"}
           </Button>
           {createError && (

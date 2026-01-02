@@ -23,7 +23,7 @@ const Index = () => {
 
   return (
     <PageLayout showBack={false} className="flex flex-col">
-      <div className="flex-1 flex flex-col items-center justify-center gap-8 max-w-md mx-auto w-full">
+      <div className="flex-1 flex flex-col items-center justify-center gap-8 max-w-md mx-auto w-full animate-fade-in">
         {/* Logo */}
         <div className="text-center space-y-2">
           <h1 className="text-6xl font-bold tracking-tighter">TOPO</h1>
@@ -45,7 +45,7 @@ const Index = () => {
         <div className="w-full space-y-4">
           <Button
             onClick={() => navigate(`/new-game?mode=${selectedMode}`)}
-            className="w-full h-16 text-xl font-bold"
+            className="w-full h-16 text-xl font-bold transition-transform duration-200 active:scale-95"
             size="lg"
           >
             Nueva partida
@@ -55,7 +55,7 @@ const Index = () => {
           <Button
             onClick={() => setShowAddWord(true)}
             variant="outline"
-            className="w-full h-14 text-lg font-bold border-2 gap-2"
+            className="w-full h-14 text-lg font-bold border-2 gap-2 transition-transform duration-200 active:scale-95"
             size="lg"
           >
             <PlusCircle className="w-5 h-5" />
