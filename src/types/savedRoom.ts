@@ -1,13 +1,18 @@
 import type { GameMode, GuestPlayer } from './game';
 
+export type GameVariant = 'classic' | 'double_topo' | 'guess_player';
+
 export interface SavedRoom {
   id: string;
   name: string;
   mode: GameMode;
   players: GuestPlayer[];
-  joinCode?: string; // For multi mode, stored for reference
   createdAt: string;
   updatedAt: string;
+  // Game preferences (preserved for "play again")
+  topoCount?: number;
+  variant?: GameVariant;
+  selectedPackIds?: string[];
 }
 
 export interface SavedRoomsState {

@@ -1,4 +1,4 @@
-export type GameMode = 'single' | 'multi';
+export type GameMode = 'single';
 export type GameStatus = 'lobby' | 'dealing' | 'ready' | 'discussion' | 'finished' | 'closed';
 export type PlayerRole = 'crew' | 'topo' | 'deceived_topo';
 export type Gender = 'male' | 'female' | 'other';
@@ -22,7 +22,6 @@ export interface GameSession {
   hostUserId?: string;
   hostGuestId?: string;
   mode: GameMode;
-  joinCode?: string;
   status: GameStatus;
   topoCount: number;
   maxPlayers?: number;
@@ -30,6 +29,7 @@ export interface GameSession {
   cardId?: string;
   wordText?: string;
   clueText?: string;
+  categoryText?: string;
   selectedPackIds?: string[];
   firstSpeakerPlayerId?: string;
   deceivedTopoPlayerId?: string;

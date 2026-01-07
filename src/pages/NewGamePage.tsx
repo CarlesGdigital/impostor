@@ -63,11 +63,21 @@ export default function NewGamePage() {
     if (variant === 'double_topo') setTopoCount(2);
   }, [variant]);
 
-  // Load players from selected saved room
+  // Load players and preferences from selected saved room
   useEffect(() => {
     if (selectedSavedRoom) {
       setPlayers(selectedSavedRoom.players);
       setRoomName(selectedSavedRoom.name);
+      // Restore game preferences
+      if (selectedSavedRoom.topoCount !== undefined) {
+        setTopoCount(selectedSavedRoom.topoCount);
+      }
+      if (selectedSavedRoom.variant) {
+        setVariant(selectedSavedRoom.variant as any);
+      }
+      if (selectedSavedRoom.selectedPackIds?.length) {
+        setSelectedPackIds(selectedSavedRoom.selectedPackIds);
+      }
     }
   }, [selectedSavedRoom]);
 
@@ -167,9 +177,9 @@ export default function NewGamePage() {
         const finalRoomName = roomName.trim() || `Sala ${new Date().toLocaleDateString()}`;
         if (selectedSavedRoom) {
           // Update existing room with new players
-          updateRoom(selectedSavedRoom.id, { 
-            players, 
-            name: finalRoomName 
+          updateRoom(selectedSavedRoom.id, {
+            players,
+            name: finalRoomName
           });
         } else {
           // Create new saved room
@@ -181,7 +191,7 @@ export default function NewGamePage() {
       if (mode === "single") {
         // Check if offline session (id starts with "offline-")
         const isOfflineSession = session.id.startsWith('offline-');
-        
+
         if (isOfflineSession) {
           // Offline mode: Store players in localStorage instead of database
           console.info('[NewGame] OFFLINE: Storing players locally');
@@ -322,51 +332,11 @@ export default function NewGamePage() {
       <div className="max-w-md mx-auto space-y-8">
         {/* Offline indicator */}
         <div className="flex justify-center">
+          {/* Offline indicator - always visible */}
           <OfflineIndicator />
         </div>
 
-        {/* Offline warning for multi mode */}
-        {!isOnline && mode === "multi" && (
-          <div className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm">
-            <WifiOff className="h-4 w-4 text-destructive shrink-0" />
-            <span className="text-muted-foreground">
-              El modo multimóvil no está disponible sin conexión. Usa el modo "Un móvil".
-            </span>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          <Label className="text-lg font-bold">Modo de juego</Label>
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              onClick={() => setMode("single")}
-              className={cn(
-                "flex flex-col items-center gap-2 p-4 border-2 border-foreground text-center font-bold transition-colors",
-                mode === "single" ? "bg-foreground text-background" : "bg-card hover:bg-secondary",
-              )}
-            >
-              <Smartphone className="w-6 h-6" />
-              Un móvil
-            </button>
-            <button
-              onClick={() => setMode("multi")}
-              disabled={!isOnline}
-              className={cn(
-                "flex flex-col items-center gap-2 p-4 border-2 border-foreground text-center font-bold transition-colors",
-                mode === "multi" ? "bg-foreground text-background" : "bg-card hover:bg-secondary",
-                !isOnline && "opacity-50 cursor-not-allowed"
-              )}
-            >
-              <Users className="w-6 h-6" />
-              Multimóvil
-            </button>
-          </div>
-          {mode === "multi" && (
-            <p className="text-sm text-muted-foreground text-center">
-              Los jugadores se unirán con un código desde sus móviles
-            </p>
-          )}
-        </div>
+        {/* Mode is now always single (multiplayer removed) */}
 
         <PackSelector selectedPackIds={selectedPackIds} onSelectionChange={setSelectedPackIds} />
 
@@ -524,26 +494,8 @@ export default function NewGamePage() {
           </div>
         )}
 
-        {mode === "multi" && (
-          <div className="border-2 border-foreground bg-card p-6 space-y-4">
-            <h3 className="font-bold text-lg text-center">Cómo funciona</h3>
-            <ol className="space-y-3 text-sm text-muted-foreground">
-              <li className="flex gap-3">
-                <span className="font-bold text-foreground">1.</span> Crea la sala y comparte el código
-              </li>
-              <li className="flex gap-3">
-                <span className="font-bold text-foreground">2.</span> Cada jugador entra con su móvil
-              </li>
-              <li className="flex gap-3">
-                <span className="font-bold text-foreground">3.</span> Inicia el reparto cuando estén todos
-              </li>
-              <li className="flex gap-3">
-                <span className="font-bold text-foreground">4.</span> Cada uno ve su carta en su móvil
-              </li>
-            </ol>
-          </div>
-        )}
+        {/* Multiplayer mode was removed - single player only */}
       </div>
-    </PageLayout>
+    </PageLayout >
   );
 }

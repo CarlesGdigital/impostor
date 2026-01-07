@@ -37,7 +37,7 @@ export function useSavedRooms() {
     name: string,
     mode: GameMode,
     players: GuestPlayer[],
-    joinCode?: string
+    preferences?: { topoCount?: number; variant?: string; selectedPackIds?: string[] }
   ): SavedRoom => {
     const now = new Date().toISOString();
     const newRoom: SavedRoom = {
@@ -45,9 +45,12 @@ export function useSavedRooms() {
       name,
       mode,
       players,
-      joinCode,
       createdAt: now,
       updatedAt: now,
+      // Include game preferences if provided
+      topoCount: preferences?.topoCount,
+      variant: preferences?.variant as any,
+      selectedPackIds: preferences?.selectedPackIds,
     };
 
     setState(prev => ({
@@ -102,10 +105,10 @@ export function useSavedRooms() {
       rooms: prev.rooms.map(room =>
         room.id === roomId
           ? {
-              ...room,
-              players: [...room.players, player],
-              updatedAt: new Date().toISOString(),
-            }
+            ...room,
+            players: [...room.players, player],
+            updatedAt: new Date().toISOString(),
+          }
           : room
       ),
     }));
@@ -117,10 +120,10 @@ export function useSavedRooms() {
       rooms: prev.rooms.map(room =>
         room.id === roomId
           ? {
-              ...room,
-              players: room.players.filter(p => p.id !== playerId),
-              updatedAt: new Date().toISOString(),
-            }
+            ...room,
+            players: room.players.filter(p => p.id !== playerId),
+            updatedAt: new Date().toISOString(),
+          }
           : room
       ),
     }));
@@ -132,12 +135,12 @@ export function useSavedRooms() {
       rooms: prev.rooms.map(room =>
         room.id === roomId
           ? {
-              ...room,
-              players: room.players.map(p =>
-                p.id === playerId ? { ...p, ...updates } : p
-              ),
-              updatedAt: new Date().toISOString(),
-            }
+            ...room,
+            players: room.players.map(p =>
+              p.id === playerId ? { ...p, ...updates } : p
+            ),
+            updatedAt: new Date().toISOString(),
+          }
           : room
       ),
     }));
@@ -149,10 +152,10 @@ export function useSavedRooms() {
       rooms: prev.rooms.map(room =>
         room.id === roomId
           ? {
-              ...room,
-              players: newOrder,
-              updatedAt: new Date().toISOString(),
-            }
+            ...room,
+            players: newOrder,
+            updatedAt: new Date().toISOString(),
+          }
           : room
       ),
     }));

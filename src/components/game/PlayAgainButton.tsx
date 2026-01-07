@@ -4,6 +4,7 @@ import { useSavedRooms } from '@/hooks/useSavedRooms';
 import { RefreshCw } from 'lucide-react';
 import type { Player, GameMode } from '@/types/game';
 import type { GuestPlayer } from '@/types/game';
+import type { GameVariant } from '@/types/savedRoom';
 
 interface PlayAgainButtonProps {
   sessionId: string;
@@ -11,11 +12,24 @@ interface PlayAgainButtonProps {
   mode: GameMode;
   roomName?: string;
   previousCardId?: string; // Card ID from the finished game to exclude
+  // Game preferences to preserve
+  topoCount?: number;
+  variant?: string;
+  selectedPackIds?: string[];
 }
 
-export function PlayAgainButton({ sessionId, players, mode, roomName, previousCardId }: PlayAgainButtonProps) {
+export function PlayAgainButton({
+  sessionId,
+  players,
+  mode,
+  roomName,
+  previousCardId,
+  topoCount,
+  variant,
+  selectedPackIds,
+}: PlayAgainButtonProps) {
   const navigate = useNavigate();
-  const { createRoom, getRoomsByMode } = useSavedRooms();
+  const { createRoom, updateRoom, getRoomsByMode } = useSavedRooms();
 
   const handlePlayAgain = () => {
     // Convert players to GuestPlayer format for saving
@@ -25,6 +39,13 @@ export function PlayAgainButton({ sessionId, players, mode, roomName, previousCa
       gender: p.gender || 'other',
       avatarKey: p.avatarKey || 'default',
     }));
+
+    // Game preferences to save
+    const preferences = {
+      topoCount,
+      variant,
+      selectedPackIds,
+    };
 
     // Check if a room with these exact players already exists
     const existingRooms = getRoomsByMode(mode);
@@ -36,15 +57,21 @@ export function PlayAgainButton({ sessionId, players, mode, roomName, previousCa
     });
 
     if (!existingRoom) {
-      // Create new saved room with auto-generated name
+      // Create new saved room with auto-generated name and preferences
       const roomCount = existingRooms.length + 1;
       const newName = roomName || `Sala ${roomCount}`;
-      const newRoom = createRoom(newName, mode, guestPlayers);
-      
+      const newRoom = createRoom(newName, mode, guestPlayers, undefined, preferences);
+
       // Store active room ID for NewGamePage to pick up
       localStorage.setItem('impostor:play_again_room_id', newRoom.id);
     } else {
-      // Use existing room
+      // Update existing room with latest preferences
+      updateRoom(existingRoom.id, {
+        players: guestPlayers,
+        topoCount,
+        variant: variant as GameVariant,
+        selectedPackIds,
+      });
       localStorage.setItem('impostor:play_again_room_id', existingRoom.id);
     }
 
@@ -69,3 +96,4 @@ export function PlayAgainButton({ sessionId, players, mode, roomName, previousCa
     </Button>
   );
 }
+

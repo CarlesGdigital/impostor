@@ -8,10 +8,9 @@ import { v4 as uuidv4 } from 'uuid';
 
 interface UseGameSessionOptions {
   sessionId?: string;
-  joinCode?: string;
 }
 
-export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = {}) {
+export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
   const [session, setSession] = useState<GameSession | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,8 +31,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     id: data.id,
     hostUserId: data.host_user_id,
     hostGuestId: data.host_guest_id,
-    mode: data.mode,
-    joinCode: data.join_code,
+    mode: 'single', // Always single mode now
     status: data.status,
     topoCount: data.topo_count,
     maxPlayers: data.max_players,
@@ -73,7 +71,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         console.info('[fetchSession] Loading offline session:', sessionId);
         const storedSession = localStorage.getItem(`impostor:offline_session:${sessionId}`);
         const storedPlayers = localStorage.getItem(`impostor:offline_players:${sessionId}`);
-        
+
         if (storedSession) {
           setSession(JSON.parse(storedSession));
           if (storedPlayers) {
@@ -93,8 +91,6 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
 
       if (sessionId) {
         query = query.eq('id', sessionId);
-      } else if (joinCode) {
-        query = query.eq('join_code', joinCode);
       } else {
         setLoading(false);
         return;
@@ -122,7 +118,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     } finally {
       setLoading(false);
     }
-  }, [sessionId, joinCode]);
+  }, [sessionId]);
 
   useEffect(() => {
     fetchSession();
@@ -326,9 +322,9 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     selectedPackIds?: string[],
     excludeCardId?: string // Card ID to exclude from random selection (previous game's card)
   ): Promise<GameSession | null> => {
-    console.info('[createSession] Creating session', { 
-      mode, 
-      topoCount, 
+    console.info('[createSession] Creating session', {
+      mode,
+      topoCount,
       packCount: selectedPackIds?.length || 0,
       excludeCardId: excludeCardId || 'none',
       isOnline
@@ -341,64 +337,76 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       return null;
     }
 
-    // OFFLINE MODE: Create local session without database
-    if (!isOnline) {
-      console.info('[createSession] 📴 OFFLINE MODE: Creating local session...');
-      
-      if (!hasOfflineData()) {
-        console.error('[createSession] OFFLINE FAIL: No offline data available');
-        setError('Sin conexión y sin datos offline. Sincroniza palabras cuando tengas conexión.');
-        return null;
-      }
+    // LOCAL-FIRST MODE: Always use local data if available (instant, no latency)
+    // This ensures single-player games are always fast, regardless of internet
+    if (hasOfflineData()) {
+      console.info('[createSession] 🚀 LOCAL-FIRST MODE: Using cached data for instant game...');
 
       const offlineCard = getRandomOfflineCard(selectedPackIds, excludeCardId);
-      
+
       if (!offlineCard) {
-        console.error('[createSession] OFFLINE FAIL: No cards available for selected packs');
-        setError('No hay palabras disponibles para las categorías seleccionadas (offline).');
-        return null;
+        console.warn('[createSession] LOCAL-FIRST: No cards for selected packs, trying sync...');
+        // No cards for these packs - might need fresh sync
+        // Fall through to online mode below
+      } else {
+        console.info('[createSession] 🚀 LOCAL Card selected:', {
+          word: offlineCard.word,
+          cardId: offlineCard.id,
+          masterCategory: offlineCard.master_category
+        });
+
+        // Convert master_category to readable text for fallback clue
+        const categoryDisplayNames: Record<string, string> = {
+          'general': 'General',
+          'benicolet': 'Benicolet',
+          'picantes': 'Picantes'
+        };
+        const categoryText = offlineCard.master_category
+          ? categoryDisplayNames[offlineCard.master_category] || offlineCard.master_category
+          : null;
+
+        // Create local session object (not persisted to database)
+        const localSession: GameSession = {
+          id: `offline-${uuidv4()}`,
+          hostUserId: hostUserId || null,
+          hostGuestId: hostGuestId || null,
+          mode: 'single',
+          status: 'lobby',
+          topoCount,
+          maxPlayers: null,
+          packId: null,
+          cardId: offlineCard.id,
+          wordText: offlineCard.word,
+          clueText: offlineCard.clue,
+          categoryText,
+          selectedPackIds,
+          firstSpeakerPlayerId: null,
+          deceivedTopoPlayerId: null,
+          deceivedWordText: null,
+          deceivedClueText: null,
+          createdAt: new Date().toISOString(),
+        };
+
+        // Store local session in localStorage for game page to retrieve
+        localStorage.setItem(`impostor:offline_session:${localSession.id}`, JSON.stringify(localSession));
+
+        setSession(localSession);
+        return localSession;
       }
-
-      console.info('[createSession] 📴 OFFLINE Card selected:', { 
-        word: offlineCard.word, 
-        cardId: offlineCard.id 
-      });
-
-      // Create local session object (not persisted to database)
-      const offlineSession: GameSession = {
-        id: `offline-${uuidv4()}`,
-        hostUserId: hostUserId || null,
-        hostGuestId: hostGuestId || null,
-        mode: mode,
-        joinCode: null, // No join code for offline
-        status: 'lobby',
-        topoCount,
-        maxPlayers: null,
-        packId: null,
-        cardId: offlineCard.id,
-        wordText: offlineCard.word,
-        clueText: offlineCard.clue,
-        selectedPackIds,
-        firstSpeakerPlayerId: null,
-        deceivedTopoPlayerId: null,
-        deceivedWordText: null,
-        deceivedClueText: null,
-        createdAt: new Date().toISOString(),
-      };
-
-      // Store offline session in localStorage for game page to retrieve
-      localStorage.setItem(`impostor:offline_session:${offlineSession.id}`, JSON.stringify(offlineSession));
-
-      setSession(offlineSession);
-      return offlineSession;
     }
 
-    // ONLINE MODE: Original database flow
-    // Step 1: Get random card (Chunked Search / Optimised Count-Offset Strategy)
-    // We shuffle packs and process in chunks to avoid URL length issues (414) with many packs
-    console.info('[createSession] Step 1: Getting random card (Chunked Strategy)...');
+    // NO LOCAL DATA: Need to sync or show error
+    if (!isOnline) {
+      console.error('[createSession] OFFLINE but no local data');
+      setError('Sin conexión y sin datos offline. Sincroniza palabras cuando tengas conexión.');
+      return null;
+    }
 
-    let randomCard: { id: string; word: string; clue: string; pack_id: string } | null = null;
+    // ONLINE FALLBACK: Original database flow (only when no local data)
+    // Step 1: Get random card (Chunked Search / Optimised Count-Offset Strategy)
+    console.info('[createSession] Step 1: Getting random card from server (no local data)...');
+
+    let randomCard: { id: string; word: string; clue: string; pack_id: string; packs?: { master_category: string | null } } | null = null;
     let totalCandidateCount = 0;
     let excludedPrevious = false;
 
@@ -451,10 +459,10 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
             shouldExcludePrevious = true;
             effectiveCount = totalCount - 1;
             excludedPrevious = true;
-            console.info('[createSession] Will exclude previous card from selection', { 
-              excludeCardId, 
-              totalCount, 
-              effectiveCount 
+            console.info('[createSession] Will exclude previous card from selection', {
+              excludeCardId,
+              totalCount,
+              effectiveCount
             });
           }
         }
@@ -474,7 +482,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
 
             let fetchQuery = supabase
               .from('cards')
-              .select('id, word, clue, pack_id')
+              .select('id, word, clue, pack_id, packs(master_category)')
               .in('pack_id', chunk)
               .neq('is_active', false);
 
@@ -534,16 +542,12 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
     // Step 2: Create session with preloaded word
     console.info('[createSession] Step 2: Creating game_session...');
 
-    // Safety check for mode
-    const finalMode = (mode === 'single' || mode === 'multi') ? mode : 'multi';
-    const joinCodeValue = finalMode === 'multi' ? generateJoinCode() : null;
-
     const { data, error: insertError } = await supabase
       .from('game_sessions')
       .insert({
-        mode: finalMode,
+        mode: 'single',
         topo_count: topoCount,
-        join_code: joinCodeValue,
+        join_code: null,
         host_user_id: hostUserId || null,
         host_guest_id: hostGuestId || null,
         status: 'lobby',
@@ -566,7 +570,21 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       word: randomCard.word,
     });
 
-    const newSession = mapSession(data);
+    // Convert master_category to readable text for fallback clue
+    const categoryDisplayNames: Record<string, string> = {
+      'general': 'General',
+      'benicolet': 'Benicolet',
+      'picantes': 'Picantes'
+    };
+    const masterCategory = randomCard.packs?.master_category;
+    const categoryText = masterCategory
+      ? categoryDisplayNames[masterCategory] || masterCategory
+      : null;
+
+    const newSession: GameSession = {
+      ...mapSession(data),
+      categoryText: categoryText || undefined
+    };
     setSession(newSession);
     return newSession;
   };
@@ -651,7 +669,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         // Pick deceived topo from remaining players (not the real topo)
         const remainingForDeceived = shuffledForRoles.slice(1);
         deceivedTopoId = remainingForDeceived[Math.floor(Math.random() * remainingForDeceived.length)];
-        
+
         console.info('[startDealing] Double topo mode:', { realTopoId, deceivedTopoId });
 
         // Get alternative word for deceived topo from same packs
@@ -659,7 +677,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
         if (packIds.length > 0) {
           // Shuffle packs and try to find a different card
           const shuffledPacks = shuffleArray(packIds);
-          
+
           for (const packChunk of [shuffledPacks.slice(0, 50)]) {
             const { count } = await supabase
               .from('cards')
@@ -709,7 +727,7 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       for (let i = 0; i < players.length; i++) {
         const playerId = shuffledForTurnOrder[i];
         const player = players.find(p => p.id === playerId)!;
-        
+
         let role: string;
         if (variant === 'double_topo' && playerId === deceivedTopoId) {
           role = 'deceived_topo';
@@ -772,11 +790,11 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
       }
 
       // Update session status to 'dealing' with all persisted data
-      const updateData: any = { 
+      const updateData: any = {
         status: 'dealing',
         first_speaker_player_id: randomFirstSpeaker,
       };
-      
+
       if (wordTextOverride) {
         updateData.word_text = wordTextOverride;
         updateData.clue_text = clueTextOverride;
@@ -990,11 +1008,4 @@ export function useGameSession({ sessionId, joinCode }: UseGameSessionOptions = 
   };
 }
 
-function generateJoinCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let result = '';
-  for (let i = 0; i < 4; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
+

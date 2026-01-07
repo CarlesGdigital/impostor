@@ -35,7 +35,7 @@ const AdminWordsPage = () => {
   const [bulkActioning, setBulkActioning] = useState(false);
   const [affectedSessionCount, setAffectedSessionCount] = useState<number | null>(null);
   const [checkingAffected, setCheckingAffected] = useState(false);
-  
+
   // Category change state
   const [showCategoryDialog, setShowCategoryDialog] = useState(false);
   const [targetCategory, setTargetCategory] = useState<MasterCategory | ''>('');
@@ -305,6 +305,110 @@ const AdminWordsPage = () => {
     }
   };
 
+  // Cleanup orphaned cards (cards without valid master category packs)
+  const handleCleanupOrphans = async () => {
+    setBulkActioning(true);
+    try {
+      // 1. Get ALL packs with their master_category
+      const { data: allPacks } = await supabase
+        .from('packs')
+        .select('id, name, master_category');
+
+      // Find valid pack IDs (only general, benicolet, picantes)
+      const validPackIds = new Set(
+        (allPacks || [])
+          .filter(p => p.master_category && ['general', 'benicolet', 'picantes'].includes(p.master_category))
+          .map(p => p.id)
+      );
+
+      // Find invalid packs for reporting
+      const invalidPacks = (allPacks || [])
+        .filter(p => !p.master_category || !['general', 'benicolet', 'picantes'].includes(p.master_category));
+
+      // Show what we found
+      toast.info(`📊 Packs: ${validPackIds.size} válidos, ${invalidPacks.length} inválidos`);
+
+      // STEP 1: First clean up invalid packs (this will cascade to cards)
+      if (invalidPacks.length > 0) {
+        const packNames = invalidPacks.slice(0, 10).map(p => p.name).join(', ');
+        const moreText = invalidPacks.length > 10 ? `... y ${invalidPacks.length - 10} más` : '';
+
+        if (confirm(`🗑️ PASO 1: Hay ${invalidPacks.length} packs sin categoría master válida:\n\n${packNames}${moreText}\n\nLas palabras en estos packs quedarán huérfanas.\n\n¿Eliminar estos packs?`)) {
+          // First unlink cards from these packs (set pack_id to null)
+          const invalidPackIds = invalidPacks.map(p => p.id);
+
+          // Get cards in invalid packs
+          const { data: cardsInInvalidPacks } = await supabase
+            .from('cards')
+            .select('id')
+            .in('pack_id', invalidPackIds);
+
+          const cardIds = cardsInInvalidPacks?.map(c => c.id) || [];
+
+          if (cardIds.length > 0) {
+            // Unlink from game_sessions
+            const BATCH_SIZE = 50;
+            for (let i = 0; i < cardIds.length; i += BATCH_SIZE) {
+              const chunk = cardIds.slice(i, i + BATCH_SIZE);
+              await supabase.from('game_sessions').update({ card_id: null }).in('card_id', chunk);
+            }
+
+            // Delete the cards
+            for (let i = 0; i < cardIds.length; i += BATCH_SIZE) {
+              const chunk = cardIds.slice(i, i + BATCH_SIZE);
+              await supabase.from('cards').delete().in('id', chunk);
+            }
+            toast.success(`${cardIds.length} palabras de packs inválidos eliminadas`);
+          }
+
+          // Now delete the packs
+          await supabase.from('packs').delete().in('id', invalidPackIds);
+          toast.success(`${invalidPacks.length} packs inválidos eliminados`);
+
+          await fetchData();
+        }
+      } else {
+        toast.info('✅ Todos los packs tienen master_category válida');
+      }
+
+      // STEP 2: Check for any remaining orphan cards (null pack_id)
+      const { data: orphanCards } = await supabase
+        .from('cards')
+        .select('id, word')
+        .is('pack_id', null);
+
+      if (orphanCards && orphanCards.length > 0) {
+        if (confirm(`🗑️ PASO 2: Hay ${orphanCards.length} palabras sin categoría asignada.\n\n¿Eliminarlas?`)) {
+          const orphanIds = orphanCards.map(c => c.id);
+
+          // Unlink from game_sessions
+          const BATCH_SIZE = 50;
+          for (let i = 0; i < orphanIds.length; i += BATCH_SIZE) {
+            const chunk = orphanIds.slice(i, i + BATCH_SIZE);
+            await supabase.from('game_sessions').update({ card_id: null }).in('card_id', chunk);
+          }
+
+          // Delete
+          for (let i = 0; i < orphanIds.length; i += BATCH_SIZE) {
+            const chunk = orphanIds.slice(i, i + BATCH_SIZE);
+            await supabase.from('cards').delete().in('id', chunk);
+          }
+
+          toast.success(`${orphanCards.length} palabras huérfanas eliminadas`);
+          await fetchData();
+        }
+      } else {
+        toast.info('✅ No hay palabras huérfanas');
+      }
+
+    } catch (e: any) {
+      console.error('[CleanupOrphans] Error:', e);
+      toast.error('Error al limpiar: ' + e.message);
+    } finally {
+      setBulkActioning(false);
+    }
+  };
+
   // === BULK CATEGORY CHANGE ===
   const handleBulkCategoryChange = async () => {
     if (!hasSelection || !targetCategory) return;
@@ -316,9 +420,9 @@ const AdminWordsPage = () => {
 
     try {
       // Find or create the pack for this master category
-      const packName = targetCategory === 'general' ? 'General' 
-        : targetCategory === 'benicolet' ? 'Benicolet' 
-        : 'Picantes';
+      const packName = targetCategory === 'general' ? 'General'
+        : targetCategory === 'benicolet' ? 'Benicolet'
+          : 'Picantes';
       const packSlug = targetCategory;
 
       let { data: pack } = await supabase
@@ -332,11 +436,11 @@ const AdminWordsPage = () => {
         // Create the pack for this master category
         const { data: newPack, error: packError } = await supabase
           .from('packs')
-          .insert({ 
-            name: packName, 
-            slug: packSlug, 
+          .insert({
+            name: packName,
+            slug: packSlug,
             master_category: targetCategory,
-            is_active: true 
+            is_active: true
           })
           .select()
           .single();
@@ -402,9 +506,9 @@ const AdminWordsPage = () => {
         .maybeSingle();
 
       if (packError || !pack) {
-        const categoryName = formMasterCategory === 'general' ? 'General' 
-          : formMasterCategory === 'benicolet' ? 'Benicolet' 
-          : 'Picantes';
+        const categoryName = formMasterCategory === 'general' ? 'General'
+          : formMasterCategory === 'benicolet' ? 'Benicolet'
+            : 'Picantes';
         toast.error(`No existe la categoría "${categoryName}" en el sistema. Contacta con un administrador.`);
         setSaving(false);
         return;
@@ -641,7 +745,17 @@ const AdminWordsPage = () => {
         )}
 
         {!hasSelection && (
-          <div className="flex justify-end mb-2">
+          <div className="flex justify-end gap-2 mb-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCleanupOrphans}
+              disabled={bulkActioning}
+              className="gap-1 text-orange-600 hover:text-orange-600 hover:bg-orange-600/10"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Limpiar Huérfanas
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -714,15 +828,15 @@ const AdminWordsPage = () => {
                 </SelectContent>
               </Select>
               <div className="flex gap-2 justify-end">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setShowCategoryDialog(false)}
                   disabled={bulkActioning}
                 >
                   Cancelar
                 </Button>
-                <Button 
-                  onClick={handleBulkCategoryChange} 
+                <Button
+                  onClick={handleBulkCategoryChange}
                   disabled={bulkActioning || !targetCategory}
                 >
                   {bulkActioning ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
@@ -810,15 +924,19 @@ const AdminWordsPage = () => {
                 <DialogTitle>Importar palabras</DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Formato: pack_slug, word, clue, difficulty (opcional), is_active (opcional)
-                </p>
+                <div className="text-sm text-muted-foreground space-y-2">
+                  <p><strong>Formato:</strong> categoria, palabra, pista</p>
+                  <p className="text-xs">
+                    Categorías válidas: <code className="bg-muted px-1 rounded">general</code>, <code className="bg-muted px-1 rounded">benicolet</code>, <code className="bg-muted px-1 rounded">picantes</code>
+                  </p>
+                </div>
                 <textarea
                   className="w-full h-48 p-3 border-2 border-border rounded-md text-sm font-mono resize-none"
                   value={csvContent}
                   onChange={(e) => setCsvContent(e.target.value)}
-                  placeholder="general, Pirámide, Estructura triangular, 2, true
-animales, León, Rey de la selva, 1, true"
+                  placeholder="general, Pirámide, Estructura triangular
+benicolet, Forn de lleña, On es fa pa
+picantes, Consolador, Juguete para adultos"
                 />
                 {importResults && (
                   <div className="p-3 bg-secondary rounded-md text-sm space-y-1">

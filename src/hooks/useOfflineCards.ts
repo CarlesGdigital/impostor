@@ -6,6 +6,7 @@ interface OfflineCard {
   word: string;
   clue: string | null;
   pack_id: string;
+  master_category?: string | null;
 }
 
 interface OfflinePack {
@@ -64,7 +65,7 @@ export function useOfflineCards() {
       // Store in localStorage
       localStorage.setItem(CARDS_STORAGE_KEY, JSON.stringify(cards || []));
       localStorage.setItem(PACKS_STORAGE_KEY, JSON.stringify(packs || []));
-      
+
       const now = new Date();
       localStorage.setItem(LAST_SYNC_KEY, now.toISOString());
       setLastSync(now);
@@ -106,10 +107,11 @@ export function useOfflineCards() {
     excludeCardId?: string
   ): OfflineCard | null => {
     const allCards = getOfflineCards();
-    
+    const allPacks = getOfflinePacks();
+
     // Filter by selected packs
     let candidates = allCards.filter(card => selectedPackIds.includes(card.pack_id));
-    
+
     console.info('[useOfflineCards] getRandomOfflineCard', {
       totalCards: allCards.length,
       selectedPacks: selectedPackIds.length,
@@ -132,14 +134,22 @@ export function useOfflineCards() {
     const randomIndex = Math.floor(Math.random() * candidates.length);
     const selected = candidates[randomIndex];
 
+    // Find the pack to get master_category
+    const pack = allPacks.find(p => p.id === selected.pack_id);
+    const cardWithCategory: OfflineCard = {
+      ...selected,
+      master_category: pack?.master_category || null
+    };
+
     console.info('[useOfflineCards] Selected offline card:', {
-      cardId: selected.id,
-      word: selected.word,
+      cardId: cardWithCategory.id,
+      word: cardWithCategory.word,
+      masterCategory: cardWithCategory.master_category,
       candidateCount: candidates.length
     });
 
-    return selected;
-  }, [getOfflineCards]);
+    return cardWithCategory;
+  }, [getOfflineCards, getOfflinePacks]);
 
   // Check if we have offline data
   const hasOfflineData = useCallback((): boolean => {

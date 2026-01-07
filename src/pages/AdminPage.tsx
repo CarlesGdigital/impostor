@@ -4,7 +4,7 @@ import { PageLayout } from '@/components/layout/PageLayout';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
-import { Library, FolderOpen, Users, Loader2, Flag } from 'lucide-react';
+import { Library, Users, Loader2, Flag } from 'lucide-react';
 
 const AdminPage = () => {
   const navigate = useNavigate();
@@ -45,15 +45,6 @@ const AdminPage = () => {
         >
           <Library className="w-6 h-6" />
           Palabras
-        </Button>
-
-        <Button
-          onClick={() => navigate('/admin/packs')}
-          variant="outline"
-          className="w-full h-16 text-lg justify-start gap-4 border-2"
-        >
-          <FolderOpen className="w-6 h-6" />
-          Categorías
         </Button>
 
         <Button

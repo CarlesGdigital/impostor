@@ -33,15 +33,13 @@ export default function GamePage() {
   const currentPlayer = players[currentIndex];
   const isLastPlayer = currentIndex >= players.length - 1;
 
+  // Read variant data from localStorage (early so it's available in all phases)
+  const variant = sessionId ? localStorage.getItem(`impostor:variant:${sessionId}`) || 'classic' : 'classic';
+
   const isTopo = useMemo(() => currentPlayer?.role === "topo", [currentPlayer]);
   const isDeceivedTopo = useMemo(() => currentPlayer?.role === "deceived_topo", [currentPlayer]);
 
-  // Multi-mode redirect: this page is only for single-player pass-the-phone
-  useEffect(() => {
-    if (session?.mode === 'multi') {
-      navigate('/');
-    }
-  }, [session?.mode, navigate]);
+
 
   // First speaker - use persisted random first speaker from database
   const firstPlayer = useMemo(() => {
@@ -96,18 +94,18 @@ export default function GamePage() {
     const realTopos = players.filter((p) => p.role === "topo");
     const deceivedTopos = players.filter((p) => p.role === "deceived_topo");
     const allTopos = [...realTopos, ...deceivedTopos];
-    
+
     return (
       <PageLayout title="Resumen" showBack={false}>
         <div className="max-w-md mx-auto space-y-8 text-center">
           <div className="text-6xl">🎭</div>
-          
+
           {/* Real Topo(s) */}
           <div className="space-y-2">
             <p className="text-muted-foreground">Topo(s) real(es):</p>
             <p className="text-3xl font-bold">{realTopos.map((t) => t.displayName).join(", ") || "—"}</p>
           </div>
-          
+
           {/* Deceived Topo (if double_topo variant) */}
           {deceivedTopos.length > 0 && (
             <div className="space-y-2 p-4 border-2 border-dashed border-amber-500 rounded-lg bg-amber-500/10">
@@ -120,14 +118,14 @@ export default function GamePage() {
               )}
             </div>
           )}
-          
+
           <div className="space-y-2">
             <p className="text-muted-foreground">Palabra real:</p>
             <p className="text-4xl font-bold">{session.wordText || "—"}</p>
           </div>
           <div className="space-y-2">
             <p className="text-muted-foreground">Pista del topo:</p>
-            <p className="text-2xl">{session.clueText || "—"}</p>
+            <p className="text-2xl">{session.clueText || session.categoryText || "—"}</p>
           </div>
           <div className="space-y-3 pt-4">
             <PlayAgainButton
@@ -135,6 +133,9 @@ export default function GamePage() {
               players={players}
               mode="single"
               previousCardId={session.cardId}
+              topoCount={session.topoCount}
+              variant={variant}
+              selectedPackIds={session.selectedPackIds || []}
             />
             <Button onClick={() => navigate("/")} variant="outline" className="w-full h-14 text-lg font-bold border-2">
               Volver al inicio
@@ -190,8 +191,7 @@ export default function GamePage() {
     // Is dealing in progress?
     const isDealingInProgress = loading || dealingRequested || waitingForAssignment;
 
-    // Mode single doesn't need "host" terminology
-    const isSingleMode = session?.mode === "single";
+
 
     const handleButtonClick = async () => {
       if (canReveal) {
@@ -250,19 +250,14 @@ export default function GamePage() {
                   <p className="font-bold">Error:</p>
                   <p>{error}</p>
                   <Button onClick={handleRetry} variant="destructive" className="mt-4">
-                    Reintentar asignación
+                    Reintentar
                   </Button>
                 </div>
               ) : isDealingInProgress ? (
-                <>
-                  <p className="text-sm text-muted-foreground">Asignando carta...</p>
-                  {waitingForAssignment && (
-                    <p className="text-xs text-muted-foreground/70">Esperando respuesta del servidor...</p>
-                  )}
-                </>
+                <p className="text-sm text-muted-foreground">Preparando reparto...</p>
               ) : canStartDealing ? (
                 <p className="text-sm text-muted-foreground">
-                  {isSingleMode ? "Pulse 'Iniciar reparto' para comenzar." : "Listo para iniciar el reparto."}
+                  Pulse 'Iniciar reparto' para comenzar.
                 </p>
               ) : players.length < 3 ? (
                 <p className="text-sm text-muted-foreground">
@@ -289,14 +284,14 @@ export default function GamePage() {
   // Fase "reveal"
   console.debug("[GamePage] reveal phase:", currentPlayer.role, isTopo, isDeceivedTopo);
 
-  // Read variant data from localStorage
-  const variant = sessionId ? localStorage.getItem(`impostor:variant:${sessionId}`) || 'classic' : 'classic';
+  // Read targetPlayerId from localStorage (variant already declared above)
   const targetPlayerId = sessionId ? localStorage.getItem(`impostor:targetPlayerId:${sessionId}`) : null;
 
   // Calculate display values based on variant and role
   let displayAsTopo = isTopo;
   let displayWord = session.wordText ?? "";
-  let displayClue = session.clueText ?? "";
+  // Use category as fallback clue when no clue is available
+  let displayClue = session.clueText || session.categoryText || "";
   let extraNote: string | null = null;
 
   if (isDeceivedTopo) {

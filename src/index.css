@@ -7,82 +7,82 @@
 
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
-Dark/Gold Mystery Theme
+Earth/Nature Theme - Inspired by the mole's underground world
 */
 
 @layer base {
   :root {
-    /* Dark charcoal background */
-    --background: 220 20% 8%;
-    --foreground: 45 30% 85%;
+    /* Deep earth background - warm brown-black */
+    --background: 30 25% 10%;
+    --foreground: 35 30% 88%;
 
-    /* Cards - slightly elevated dark surface */
-    --card: 220 18% 12%;
-    --card-foreground: 45 30% 90%;
+    /* Cards - slightly elevated earth surface */
+    --card: 30 20% 14%;
+    --card-foreground: 35 30% 92%;
 
     /* Popover */
-    --popover: 220 18% 10%;
-    --popover-foreground: 45 30% 90%;
+    --popover: 30 22% 12%;
+    --popover-foreground: 35 30% 92%;
 
-    /* Primary - Gold accent */
-    --primary: 43 85% 55%;
-    --primary-foreground: 220 20% 8%;
+    /* Primary - Fresh leaf green */
+    --primary: 120 45% 42%;
+    --primary-foreground: 35 30% 95%;
 
-    /* Secondary - Muted dark */
-    --secondary: 220 15% 18%;
-    --secondary-foreground: 45 30% 85%;
+    /* Secondary - Warm brown */
+    --secondary: 30 20% 20%;
+    --secondary-foreground: 35 30% 88%;
 
-    /* Muted - Subtle backgrounds */
-    --muted: 220 15% 15%;
-    --muted-foreground: 45 15% 55%;
+    /* Muted - Deep earth */
+    --muted: 30 18% 16%;
+    --muted-foreground: 35 15% 55%;
 
-    /* Accent - Gold-tinted */
-    --accent: 43 50% 25%;
-    --accent-foreground: 45 30% 90%;
+    /* Accent - Moss green */
+    --accent: 95 35% 28%;
+    --accent-foreground: 35 30% 92%;
 
     /* Destructive */
-    --destructive: 0 70% 45%;
+    --destructive: 0 65% 45%;
     --destructive-foreground: 0 0% 98%;
 
-    /* Borders - Subtle gold */
-    --border: 43 30% 25%;
-    --input: 43 30% 25%;
-    --ring: 43 85% 55%;
+    /* Borders - Earth brown */
+    --border: 30 25% 25%;
+    --input: 30 25% 25%;
+    --ring: 120 45% 42%;
 
     --radius: 0.5rem;
 
     /* Sidebar */
-    --sidebar-background: 220 20% 6%;
-    --sidebar-foreground: 45 30% 85%;
-    --sidebar-primary: 43 85% 55%;
-    --sidebar-primary-foreground: 220 20% 8%;
-    --sidebar-accent: 43 50% 25%;
-    --sidebar-accent-foreground: 45 30% 90%;
-    --sidebar-border: 43 30% 25%;
-    --sidebar-ring: 43 85% 55%;
-    --sidebar: 220 20% 6%;
+    --sidebar-background: 30 25% 8%;
+    --sidebar-foreground: 35 30% 88%;
+    --sidebar-primary: 120 45% 42%;
+    --sidebar-primary-foreground: 35 30% 95%;
+    --sidebar-accent: 95 35% 28%;
+    --sidebar-accent-foreground: 35 30% 92%;
+    --sidebar-border: 30 25% 25%;
+    --sidebar-ring: 120 45% 42%;
+    --sidebar: 30 25% 8%;
 
-    /* Charts */
-    --chart-1: 43 85% 55%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    /* Charts - Nature palette */
+    --chart-1: 120 45% 42%;
+    --chart-2: 35 60% 50%;
+    --chart-3: 85 40% 45%;
+    --chart-4: 160 50% 40%;
+    --chart-5: 20 70% 50%;
 
     /* Typography */
     --font-sans: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
     --font-serif: 'Lora', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
     --font-mono: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 
-    /* Shadows with gold tint */
-    --shadow-2xs: 1px 1px 0px 0px hsl(43 40% 20% / 0.5);
-    --shadow-xs: 2px 2px 0px 0px hsl(43 40% 20% / 0.5);
-    --shadow-sm: 3px 3px 0px 0px hsl(43 40% 20% / 0.5);
-    --shadow: 5px 5px 0px 0px hsl(43 40% 20% / 0.5);
-    --shadow-md: 8px 8px 0px 0px hsl(43 40% 20% / 0.5);
-    --shadow-lg: 12px 12px 0px 0px hsl(43 40% 20% / 0.5);
-    --shadow-xl: 16px 16px 0px 0px hsl(43 40% 20% / 0.5);
-    --shadow-2xl: 24px 24px 0px 0px hsl(43 40% 20% / 0.5);
+    /* Shadows with earthy brown tint */
+    --shadow-2xs: 1px 1px 0px 0px hsl(30 30% 15% / 0.6);
+    --shadow-xs: 2px 2px 0px 0px hsl(30 30% 15% / 0.6);
+    --shadow-sm: 3px 3px 0px 0px hsl(30 30% 15% / 0.6);
+    --shadow: 5px 5px 0px 0px hsl(30 30% 15% / 0.6);
+    --shadow-md: 8px 8px 0px 0px hsl(30 30% 15% / 0.6);
+    --shadow-lg: 12px 12px 0px 0px hsl(30 30% 15% / 0.6);
+    --shadow-xl: 16px 16px 0px 0px hsl(30 30% 15% / 0.6);
+    --shadow-2xl: 24px 24px 0px 0px hsl(30 30% 15% / 0.6);
 
     --tracking-normal: 0em;
     --spacing: 0.25rem;
@@ -98,14 +98,26 @@ Dark/Gold Mystery Theme
     @apply bg-background text-foreground;
   }
 
-  /* Custom gold text class */
-  .text-gold {
-    color: hsl(43 85% 55%);
+  /* Nature-themed text classes */
+  .text-leaf {
+    color: hsl(120 45% 42%);
   }
 
-  /* Gold gradient text */
-  .text-gold-gradient {
-    background: linear-gradient(135deg, hsl(43 85% 65%) 0%, hsl(43 85% 45%) 100%);
+  .text-earth {
+    color: hsl(30 40% 45%);
+  }
+
+  /* Leaf green gradient text */
+  .text-leaf-gradient {
+    background: linear-gradient(135deg, hsl(120 50% 50%) 0%, hsl(95 45% 35%) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Earth gradient text */
+  .text-earth-gradient {
+    background: linear-gradient(135deg, hsl(35 50% 55%) 0%, hsl(25 45% 35%) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

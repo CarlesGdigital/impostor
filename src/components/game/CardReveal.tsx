@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 interface CardRevealProps {
@@ -7,7 +7,7 @@ interface CardRevealProps {
   isTopo: boolean;
   isRevealed: boolean;
   onRevealComplete?: () => void;
-  revealDuration?: number;
+  revealDuration?: number; // Kept for compatibility, but flip animation is ~600ms
   className?: string;
   extraNote?: string | null;
 }
@@ -18,114 +18,134 @@ export function CardReveal({
   isTopo,
   isRevealed: initialRevealed,
   onRevealComplete,
-  revealDuration = 1000,
   className,
   extraNote,
 }: CardRevealProps) {
-  const [isPressed, setIsPressed] = useState(false);
+  const [isFlipped, setIsFlipped] = useState(false);
   const [hasRevealed, setHasRevealed] = useState(initialRevealed);
-  const [progress, setProgress] = useState(0);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const startTimeRef = useRef<number>(0);
-  const completedRef = useRef(false); // Guard against double calls
 
-  const startReveal = useCallback(() => {
-    if (hasRevealed || completedRef.current) return; // Already revealed
-
-    setIsPressed(true);
-    startTimeRef.current = Date.now();
-
-    const updateProgress = () => {
-      const elapsed = Date.now() - startTimeRef.current;
-      const newProgress = Math.min((elapsed / revealDuration) * 100, 100);
-      setProgress(newProgress);
-
-      if (elapsed >= revealDuration && !completedRef.current) {
-        completedRef.current = true; // Mark as completed
-        setHasRevealed(true);
-        onRevealComplete?.();
-      } else if (elapsed < revealDuration) {
-        timerRef.current = setTimeout(updateProgress, 50);
-      }
-    };
-
-    timerRef.current = setTimeout(updateProgress, 50);
-  }, [revealDuration, onRevealComplete, hasRevealed]);
-
-  const stopReveal = useCallback(() => {
-    setIsPressed(false);
-    setProgress(0);
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }, []);
+  // Check for reduced motion preference
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setPrefersReducedMotion(mediaQuery.matches);
+
+    const handleChange = (e: MediaQueryListEvent) => {
+      setPrefersReducedMotion(e.matches);
     };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
-  if (hasRevealed) {
-    return (
-      <div
-        className={cn(
-          "flex flex-col items-center justify-center p-8 border-4 border-foreground bg-card min-h-[300px]",
-          className,
-        )}
-      >
-        {isTopo ? (
-          <>
-            <span className="text-6xl font-bold text-destructive mb-4">🕵️ TOPO</span>
-            <span className="text-lg text-muted-foreground">Pista:</span>
-            <span className="text-3xl font-bold text-center break-words mt-2">{clue || "Sin pista"}</span>
-          </>
-        ) : (
-          <span className="text-5xl font-bold text-center break-words">{word || "Cargando"}</span>
-        )}
-        {extraNote && (
-          <p className="mt-4 text-lg font-bold text-amber-500 text-center">{extraNote}</p>
-        )}
-        <span className="mt-4 text-muted-foreground">Carta revelada</span>
-      </div>
-    );
-  }
+  const handleFlip = () => {
+    if (hasRevealed) return;
+
+    if (prefersReducedMotion) {
+      // Instant reveal for accessibility
+      setHasRevealed(true);
+      onRevealComplete?.();
+    } else {
+      // Start flip animation
+      setIsFlipped(true);
+      // Complete reveal after animation
+      setTimeout(() => {
+        setHasRevealed(true);
+        onRevealComplete?.();
+      }, 600);
+    }
+  };
+
+  // Flip animation styles
+  const flipContainerStyle = {
+    perspective: '1000px',
+  };
+
+  const flipInnerStyle = {
+    position: 'relative' as const,
+    width: '100%',
+    minHeight: '300px',
+    transformStyle: 'preserve-3d' as const,
+    transition: prefersReducedMotion ? 'none' : 'transform 0.6s ease-out',
+    transform: isFlipped || hasRevealed ? 'rotateY(180deg)' : 'rotateY(0deg)',
+  };
+
+  const faceStyle = {
+    position: 'absolute' as const,
+    width: '100%',
+    height: '100%',
+    backfaceVisibility: 'hidden' as const,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
+
+  const frontStyle = {
+    ...faceStyle,
+    transform: 'rotateY(0deg)',
+  };
+
+  const backStyle = {
+    ...faceStyle,
+    transform: 'rotateY(180deg)',
+  };
 
   return (
     <div className={cn("flex flex-col items-center gap-6", className)}>
-      <button
-        onMouseDown={startReveal}
-        onMouseUp={stopReveal}
-        onMouseLeave={stopReveal}
-        onTouchStart={startReveal}
-        onTouchEnd={stopReveal}
-        className={cn(
-          "relative flex flex-col items-center justify-center p-8 border-4 border-foreground min-h-[300px] w-full",
-          "transition-all select-none touch-none",
-          isPressed ? "bg-secondary scale-95" : "bg-card hover:bg-secondary/50",
-        )}
-      >
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-8xl opacity-20">🔒</span>
-        </div>
+      <div style={flipContainerStyle} className="w-full">
+        <div style={flipInnerStyle}>
+          {/* Front of card (hidden/lock state) */}
+          <button
+            onClick={handleFlip}
+            disabled={hasRevealed || isFlipped}
+            style={frontStyle}
+            className={cn(
+              "p-8 border-4 border-foreground bg-card hover:bg-secondary/50 transition-colors",
+              "select-none cursor-pointer"
+            )}
+          >
+            <div className="flex flex-col items-center justify-center gap-4">
+              <span className="text-8xl opacity-30">🔒</span>
+              <span className="text-2xl font-bold text-center">
+                Toca para revelar tu carta
+              </span>
+              <span className="text-sm text-muted-foreground">
+                Un toque para ver
+              </span>
+            </div>
+          </button>
 
-        <span className="relative z-10 text-2xl font-bold text-center">
-          {isPressed ? "Mantenga pulsado..." : "Mantenga pulsado para revelar"}
-        </span>
-
-        {isPressed && (
-          <div className="relative z-10 w-full max-w-xs mt-6 h-4 border-2 border-foreground bg-background">
-            <div className="h-full bg-foreground transition-all duration-100" style={{ width: `${progress}%` }} />
+          {/* Back of card (revealed content) */}
+          <div
+            style={backStyle}
+            className="p-8 border-4 border-foreground bg-card"
+          >
+            {isTopo ? (
+              <div className="flex flex-col items-center justify-center">
+                <span className="text-6xl font-bold text-destructive mb-4">🕵️ TOPO</span>
+                <span className="text-lg text-muted-foreground">Pista:</span>
+                <span className="text-3xl font-bold text-center break-words mt-2">{clue || "Sin pista"}</span>
+              </div>
+            ) : (
+              <span className="text-5xl font-bold text-center break-words">{word || "Cargando"}</span>
+            )}
+            {extraNote && (
+              <p className="mt-4 text-lg font-bold text-amber-500 text-center">{extraNote}</p>
+            )}
+            {hasRevealed && (
+              <span className="mt-4 text-muted-foreground">Carta revelada</span>
+            )}
           </div>
-        )}
-      </button>
+        </div>
+      </div>
 
-      <p className="text-sm text-muted-foreground text-center">
-        Mantén pulsado durante {revealDuration / 1000} segundos para ver tu carta
-      </p>
+      {!hasRevealed && !isFlipped && (
+        <p className="text-sm text-muted-foreground text-center">
+          Toca la carta para revelarla
+        </p>
+      )}
     </div>
   );
 }

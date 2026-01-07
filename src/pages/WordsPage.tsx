@@ -7,12 +7,14 @@ import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
+import { useGuestId } from '@/hooks/useGuestId';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Plus, Loader2, Edit2, History, Flag, Search, Globe, MapPin, Flame } from 'lucide-react';
+import { Plus, Loader2, Edit2, History, Flag, Search, Globe, MapPin, Flame, ListPlus } from 'lucide-react';
 import { WordEditDialog } from '@/components/words/WordEditDialog';
 import { WordHistoryDialog } from '@/components/words/WordHistoryDialog';
 import { WordReportDialog } from '@/components/words/WordReportDialog';
+import { BulkWordDialog } from '@/components/words/BulkWordDialog';
 import type { MasterCategory } from '@/types/admin';
 
 interface Card {
@@ -36,10 +38,18 @@ const MASTER_CATEGORY_PACKS: Record<MasterCategory, { name: string; slug: string
   picantes: { name: 'Picantes', slug: 'picantes' },
 };
 
+// Rate limiting constants for guests
+const GUEST_RATE_LIMIT_KEY = 'impostor:guest_word_submissions';
+const GUEST_MAX_PER_HOUR = 30;
+const GUEST_MAX_BULK_PER_SUBMISSION = 50;
+
 export default function WordsPage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const [canSubmit, setCanSubmit] = useState(false);
+  const guestId = useGuestId();
+
+  // Guests can always submit (with rate limiting), users may have can_submit_words permission
+  const [canSubmit, setCanSubmit] = useState(true);
   const [checkingPermission, setCheckingPermission] = useState(true);
 
   const [cards, setCards] = useState<Card[]>([]);
@@ -50,39 +60,82 @@ export default function WordsPage() {
   // Dialog states
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
+  const [showBulkDialog, setShowBulkDialog] = useState(false);
   const [showHistoryDialog, setShowHistoryDialog] = useState(false);
   const [historyCardId, setHistoryCardId] = useState<string | null>(null);
   const [historyCardWord, setHistoryCardWord] = useState('');
   const [showReportDialog, setShowReportDialog] = useState(false);
   const [reportingCard, setReportingCard] = useState<Card | null>(null);
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate('/auth');
-    }
-  }, [user, authLoading, navigate]);
+  // Check rate limit for guests
+  const checkGuestRateLimit = (): { allowed: boolean; remaining: number } => {
+    const now = Date.now();
+    const hourAgo = now - (60 * 60 * 1000);
 
+    try {
+      const stored = localStorage.getItem(GUEST_RATE_LIMIT_KEY);
+      const submissions: number[] = stored ? JSON.parse(stored) : [];
+
+      // Filter to only submissions in the last hour
+      const recentSubmissions = submissions.filter(ts => ts > hourAgo);
+      const remaining = GUEST_MAX_PER_HOUR - recentSubmissions.length;
+
+      return { allowed: remaining > 0, remaining: Math.max(0, remaining) };
+    } catch {
+      return { allowed: true, remaining: GUEST_MAX_PER_HOUR };
+    }
+  };
+
+  const recordGuestSubmission = (count: number = 1) => {
+    const now = Date.now();
+    const hourAgo = now - (60 * 60 * 1000);
+
+    try {
+      const stored = localStorage.getItem(GUEST_RATE_LIMIT_KEY);
+      const submissions: number[] = stored ? JSON.parse(stored) : [];
+
+      // Keep only recent + add new ones
+      const recentSubmissions = submissions.filter(ts => ts > hourAgo);
+      for (let i = 0; i < count; i++) {
+        recentSubmissions.push(now);
+      }
+
+      localStorage.setItem(GUEST_RATE_LIMIT_KEY, JSON.stringify(recentSubmissions));
+    } catch {
+      // Ignore localStorage errors
+    }
+  };
+
+  // No auth redirect - guests can access this page
+  // Check permission for logged-in users only
   useEffect(() => {
+    if (authLoading) return;
+
     if (user) {
       checkPermission();
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (canSubmit) {
+    } else {
+      // Guest users: always allowed (with rate limiting)
+      setCanSubmit(true);
+      setCheckingPermission(false);
       fetchData();
     }
-  }, [canSubmit]);
+  }, [authLoading, user]);
+
+  useEffect(() => {
+    if (canSubmit && user) {
+      fetchData();
+    }
+  }, [canSubmit, user]);
 
   const checkPermission = async () => {
     if (!user) return;
-    
+
     const { data } = await supabase
       .from('profiles')
       .select('can_submit_words')
       .eq('id', user.id)
       .maybeSingle();
-    
+
     setCanSubmit(data?.can_submit_words ?? true);
     setCheckingPermission(false);
   };
@@ -128,7 +181,7 @@ export default function WordsPage() {
       .from('profiles')
       .select('id, display_name')
       .in('id', creatorIds);
-    
+
     const profilesMap = new Map((profilesData || []).map(p => [p.id, p.display_name]));
 
     setCards((cardsData || []).map(c => ({
@@ -180,21 +233,44 @@ export default function WordsPage() {
     difficulty?: number | null;
     isActive: boolean;
   }): Promise<boolean> => {
-    if (!data.word.trim()) {
+    const trimmedWord = data.word.trim();
+
+    // Validation
+    if (!trimmedWord) {
       toast.error('La palabra es obligatoria');
       return false;
+    }
+
+    if (trimmedWord.length < 2) {
+      toast.error('La palabra debe tener al menos 2 caracteres');
+      return false;
+    }
+
+    // Rate limiting for guests
+    if (!user) {
+      const { allowed, remaining } = checkGuestRateLimit();
+      if (!allowed) {
+        toast.error('Has alcanzado el límite de palabras por hora. Espera un poco e inténtalo de nuevo.');
+        return false;
+      }
     }
 
     try {
       // Get pack for this master category
       const packId = await getPackForCategory(data.masterCategory);
-      
+
       if (!packId) {
         // Error already shown by getPackForCategory
         return false;
       }
 
       if (data.id) {
+        // Only logged-in users can edit existing cards
+        if (!user) {
+          toast.error('Debes iniciar sesión para editar palabras');
+          return false;
+        }
+
         // Get current values for history
         const { data: currentCard } = await supabase
           .from('cards')
@@ -207,7 +283,7 @@ export default function WordsPage() {
           .from('cards')
           .update({
             pack_id: packId,
-            word: data.word.trim(),
+            word: trimmedWord,
             clue: data.clue.trim() || null,
             difficulty: data.difficulty,
             is_active: data.isActive,
@@ -222,10 +298,10 @@ export default function WordsPage() {
         // Record history
         await supabase.from('card_history').insert({
           card_id: data.id,
-          user_id: user!.id,
+          user_id: user.id,
           action: 'updated',
           old_word: currentCard?.word,
-          new_word: data.word,
+          new_word: trimmedWord,
           old_clue: currentCard?.clue,
           new_clue: data.clue,
           old_difficulty: currentCard?.difficulty,
@@ -236,17 +312,25 @@ export default function WordsPage() {
 
         toast.success('Palabra actualizada');
       } else {
-        // Create new card
+        // Create new card - works for both users and guests
+        const insertData: any = {
+          pack_id: packId,
+          word: trimmedWord,
+          clue: data.clue.trim() || null,
+          difficulty: data.difficulty,
+          is_active: data.isActive,
+        };
+
+        // Set creator info based on auth status
+        if (user) {
+          insertData.created_by = user.id;
+        } else {
+          insertData.created_by_guest = guestId;
+        }
+
         const { data: newCard, error } = await supabase
           .from('cards')
-          .insert({
-            pack_id: packId,
-            word: data.word.trim(),
-            clue: data.clue.trim() || null,
-            difficulty: data.difficulty,
-            is_active: data.isActive,
-            created_by: user!.id,
-          })
+          .insert(insertData)
           .select()
           .single();
 
@@ -254,23 +338,31 @@ export default function WordsPage() {
           if (error.code === '23505') {
             toast.error('Esta palabra ya existe en la categoría');
           } else {
+            console.error('[WordsPage] Insert error:', error);
             toast.error('Error al crear la palabra');
           }
           return false;
         }
 
-        // Record history for creation
-        await supabase.from('card_history').insert({
-          card_id: newCard.id,
-          user_id: user!.id,
-          action: 'created',
-          new_word: data.word,
-          new_clue: data.clue,
-          new_difficulty: data.difficulty,
-          new_is_active: data.isActive,
-        });
+        // Record submission for rate limiting (guests only)
+        if (!user) {
+          recordGuestSubmission(1);
+        }
 
-        toast.success('Palabra creada');
+        // Record history for creation (only for logged-in users)
+        if (user) {
+          await supabase.from('card_history').insert({
+            card_id: newCard.id,
+            user_id: user.id,
+            action: 'created',
+            new_word: trimmedWord,
+            new_clue: data.clue,
+            new_difficulty: data.difficulty,
+            new_is_active: data.isActive,
+          });
+        }
+
+        toast.success('Palabra añadida');
       }
 
       fetchData();
@@ -280,6 +372,105 @@ export default function WordsPage() {
       return false;
     }
   };
+
+  // Bulk word save handler
+  const handleBulkSave = async (
+    words: string[],
+    category: MasterCategory
+  ): Promise<{ success: number; failed: { word: string; reason: string }[] }> => {
+    const failed: { word: string; reason: string }[] = [];
+    let success = 0;
+
+    // Rate limiting for guests
+    if (!user) {
+      const { allowed, remaining } = checkGuestRateLimit();
+      if (!allowed) {
+        return {
+          success: 0,
+          failed: [{ word: '', reason: 'Has alcanzado el límite de palabras por hora' }]
+        };
+      }
+
+      // Limit bulk submission size
+      if (words.length > remaining) {
+        return {
+          success: 0,
+          failed: [{ word: '', reason: `Solo puedes añadir ${remaining} palabras más esta hora` }]
+        };
+      }
+
+      if (words.length > GUEST_MAX_BULK_PER_SUBMISSION) {
+        return {
+          success: 0,
+          failed: [{ word: '', reason: `Máximo ${GUEST_MAX_BULK_PER_SUBMISSION} palabras por envío` }]
+        };
+      }
+    }
+
+    // Get pack for category
+    const packId = await getPackForCategory(category);
+    if (!packId) {
+      return { success: 0, failed: [{ word: '', reason: 'Categoría no encontrada' }] };
+    }
+
+    // Process each word
+    for (const word of words) {
+      const trimmed = word.trim();
+
+      // Validation
+      if (!trimmed) {
+        failed.push({ word, reason: 'Palabra vacía' });
+        continue;
+      }
+
+      if (trimmed.length < 2) {
+        failed.push({ word: trimmed, reason: 'Demasiado corta (min. 2 caracteres)' });
+        continue;
+      }
+
+      // Insert word
+      const insertData: any = {
+        pack_id: packId,
+        word: trimmed,
+        clue: null,
+        is_active: true,
+      };
+
+      if (user) {
+        insertData.created_by = user.id;
+      } else {
+        insertData.created_by_guest = guestId;
+      }
+
+      const { error } = await supabase
+        .from('cards')
+        .insert(insertData);
+
+      if (error) {
+        if (error.code === '23505') {
+          failed.push({ word: trimmed, reason: 'Ya existe' });
+        } else {
+          failed.push({ word: trimmed, reason: 'Error al guardar' });
+        }
+      } else {
+        success++;
+      }
+    }
+
+    // Record submissions for rate limiting (guests only)
+    if (!user && success > 0) {
+      recordGuestSubmission(success);
+    }
+
+    // Refresh list
+    if (success > 0) {
+      fetchData();
+    }
+
+    return { success, failed };
+  };
+
+
 
   const toggleCardActive = async (card: Card) => {
     const newActive = !card.isActive;
@@ -411,7 +602,7 @@ export default function WordsPage() {
   };
 
   // Filter cards by search
-  const filteredCards = cards.filter(card => 
+  const filteredCards = cards.filter(card =>
     card.word.toLowerCase().includes(searchQuery.toLowerCase()) ||
     card.clue.toLowerCase().includes(searchQuery.toLowerCase()) ||
     card.masterCategory.toLowerCase().includes(searchQuery.toLowerCase())
@@ -451,6 +642,14 @@ export default function WordsPage() {
           <Button onClick={() => { setEditingCard(null); setShowEditDialog(true); }} className="gap-2">
             <Plus className="w-4 h-4" />
             Añadir palabra
+          </Button>
+          <Button
+            onClick={() => setShowBulkDialog(true)}
+            variant="outline"
+            className="gap-2"
+          >
+            <ListPlus className="w-4 h-4" />
+            Creación masiva
           </Button>
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -557,7 +756,7 @@ export default function WordsPage() {
         editingCard={editingCard}
         onSave={handleSaveWord}
       />
-      
+
       <WordHistoryDialog
         open={showHistoryDialog}
         onOpenChange={setShowHistoryDialog}
@@ -565,12 +764,18 @@ export default function WordsPage() {
         cardWord={historyCardWord}
         onRestore={handleRestore}
       />
-      
+
       <WordReportDialog
         open={showReportDialog}
         onOpenChange={setShowReportDialog}
         cardWord={reportingCard?.word || ''}
         onSubmit={handleReport}
+      />
+
+      <BulkWordDialog
+        open={showBulkDialog}
+        onOpenChange={setShowBulkDialog}
+        onSave={handleBulkSave}
       />
     </PageLayout>
   );
