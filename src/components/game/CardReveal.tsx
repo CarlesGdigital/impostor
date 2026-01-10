@@ -125,8 +125,15 @@ export function CardReveal({
             {isTopo ? (
               <div className="flex flex-col items-center justify-center">
                 <span className="text-6xl font-bold text-destructive mb-4">🕵️ TOPO</span>
-                <span className="text-lg text-muted-foreground">Pista:</span>
-                <span className="text-3xl font-bold text-center break-words mt-2">{clue || "Sin pista"}</span>
+                {clue && (
+                  <>
+                    <span className="text-lg text-muted-foreground">Pista:</span>
+                    <span className="text-3xl font-bold text-center break-words mt-2">{clue}</span>
+                  </>
+                )}
+                {!clue && (
+                  <span className="text-lg text-muted-foreground italic mt-2">Pistas desactivadas</span>
+                )}
               </div>
             ) : (
               <span className="text-5xl font-bold text-center break-words">{word || "Cargando"}</span>

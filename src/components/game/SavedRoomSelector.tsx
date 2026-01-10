@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { PlayerAvatar } from '@/components/game/PlayerAvatar';
 import { useSavedRooms } from '@/hooks/useSavedRooms';
 import { cn } from '@/lib/utils';
-import { Plus, Trash2, Copy, Edit2, Check, X, Users, ChevronDown, ChevronUp } from 'lucide-react';
-import type { GameMode, GuestPlayer } from '@/types/game';
+import { Plus, Users, ChevronDown, ChevronUp, Star, Clock } from 'lucide-react';
+import type { GameMode } from '@/types/game';
 import type { SavedRoom } from '@/types/savedRoom';
 
 interface SavedRoomSelectorProps {
@@ -15,48 +14,63 @@ interface SavedRoomSelectorProps {
 }
 
 export function SavedRoomSelector({ mode, onSelectRoom, selectedRoomId }: SavedRoomSelectorProps) {
-  const { getRoomsByMode, deleteRoom, duplicateRoom, updateRoom } = useSavedRooms();
+  const { favorites, history, toggleFavorite } = useSavedRooms();
   const [expanded, setExpanded] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
 
-  const rooms = getRoomsByMode(mode);
+  // Filter based on mode if needed (though history/favorites hooks usually return all or we should filter in the hook or here)
+  // For now, let's filter here to match current mode
+  const modeFavorites = favorites.filter(r => r.mode === mode);
+  const modeHistory = history.filter(r => r.mode === mode).slice(0, 5); // Just top 5 history
 
-  if (rooms.length === 0) {
+  if (modeFavorites.length === 0 && modeHistory.length === 0) {
     return null;
   }
 
-  const handleStartEdit = (room: SavedRoom) => {
-    setEditingId(room.id);
-    setEditName(room.name);
-  };
+  const selectedRoom = [...favorites, ...history].find(r => r.id === selectedRoomId);
 
-  const handleSaveEdit = (roomId: string) => {
-    if (editName.trim()) {
-      updateRoom(roomId, { name: editName.trim() });
-    }
-    setEditingId(null);
-  };
+  const RoomItem = ({ room }: { room: SavedRoom }) => (
+    <div
+      className={cn(
+        "border-2 transition-colors relative group",
+        selectedRoomId === room.id
+          ? "border-foreground bg-foreground/5"
+          : "border-border bg-card"
+      )}
+    >
+      <button
+        onClick={() => onSelectRoom(room)}
+        className="w-full flex items-center gap-3 p-3 text-left hover:bg-secondary/50 transition-colors"
+      >
+        <div className="flex -space-x-2">
+          {room.players.slice(0, 3).map(player => (
+            <div key={player.id} className="w-8 h-8 border-2 border-background rounded-full overflow-hidden">
+              <PlayerAvatar avatarKey={player.avatarKey} displayName={player.displayName} size="sm" />
+            </div>
+          ))}
+          {room.players.length > 3 && (
+            <div className="w-8 h-8 border-2 border-background rounded-full bg-muted flex items-center justify-center text-xs font-bold">
+              +{room.players.length - 3}
+            </div>
+          )}
+        </div>
+        <div className="flex-1 min-w-0 pr-8">
+          <p className="font-bold truncate">{room.name}</p>
+          <p className="text-sm text-muted-foreground">{room.players.length} jugadores</p>
+        </div>
+      </button>
 
-  const handleCancelEdit = () => {
-    setEditingId(null);
-  };
-
-  const handleDuplicate = (room: SavedRoom) => {
-    const newRoom = duplicateRoom(room.id, `${room.name} (copia)`);
-    if (newRoom) {
-      onSelectRoom(newRoom);
-    }
-  };
-
-  const handleDelete = (roomId: string) => {
-    if (selectedRoomId === roomId) {
-      onSelectRoom(null);
-    }
-    deleteRoom(roomId);
-  };
-
-  const selectedRoom = rooms.find(r => r.id === selectedRoomId);
+      {/* Favorite Toggle Button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleFavorite(room.id);
+        }}
+        className="absolute top-3 right-3 p-1.5 hover:bg-secondary rounded-full text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <Star className={cn("w-4 h-4", room.isFavorite && "fill-yellow-400 text-yellow-400")} />
+      </button>
+    </div>
+  );
 
   return (
     <div className="space-y-3">
@@ -66,125 +80,59 @@ export function SavedRoomSelector({ mode, onSelectRoom, selectedRoomId }: SavedR
       >
         <div className="flex items-center gap-2">
           <Users className="w-5 h-5" />
-          <span className="font-bold">Salas guardadas ({rooms.length})</span>
+          <span className="font-bold">Cargar partida ({modeFavorites.length + modeHistory.length})</span>
         </div>
         {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
       </button>
 
       {expanded && (
-        <div className="space-y-2 pl-2 border-l-2 border-border">
-          {/* Option to start fresh */}
+        <div className="space-y-4 pl-2 border-l-2 border-border">
+          {/* Start New Option */}
           <button
             onClick={() => onSelectRoom(null)}
             className={cn(
               "w-full flex items-center gap-3 p-3 border-2 transition-colors text-left",
-              !selectedRoomId 
-                ? "border-foreground bg-foreground text-background" 
+              !selectedRoomId
+                ? "border-foreground bg-foreground text-background"
                 : "border-border bg-card hover:bg-secondary"
             )}
           >
             <Plus className="w-5 h-5" />
-            <span className="font-bold">Crear nueva sala</span>
+            <span className="font-bold">Nueva partida (vacía)</span>
           </button>
 
-          {/* Saved rooms */}
-          {rooms.map(room => (
-            <div
-              key={room.id}
-              className={cn(
-                "border-2 transition-colors",
-                selectedRoomId === room.id
-                  ? "border-foreground bg-foreground/5"
-                  : "border-border bg-card"
-              )}
-            >
-              <button
-                onClick={() => onSelectRoom(room)}
-                className="w-full flex items-center gap-3 p-3 text-left hover:bg-secondary/50 transition-colors"
-              >
-                <div className="flex -space-x-2">
-                  {room.players.slice(0, 3).map(player => (
-                    <div key={player.id} className="w-8 h-8 border-2 border-background rounded-full overflow-hidden">
-                      <PlayerAvatar avatarKey={player.avatarKey} displayName={player.displayName} size="sm" />
-                    </div>
-                  ))}
-                  {room.players.length > 3 && (
-                    <div className="w-8 h-8 border-2 border-background rounded-full bg-muted flex items-center justify-center text-xs font-bold">
-                      +{room.players.length - 3}
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  {editingId === room.id ? (
-                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                      <Input
-                        value={editName}
-                        onChange={e => setEditName(e.target.value)}
-                        className="h-8"
-                        autoFocus
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') handleSaveEdit(room.id);
-                          if (e.key === 'Escape') handleCancelEdit();
-                        }}
-                      />
-                      <button onClick={() => handleSaveEdit(room.id)} className="p-1 hover:bg-secondary rounded">
-                        <Check className="w-4 h-4" />
-                      </button>
-                      <button onClick={handleCancelEdit} className="p-1 hover:bg-secondary rounded">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="font-bold truncate">{room.name}</p>
-                      <p className="text-sm text-muted-foreground">{room.players.length} jugadores</p>
-                    </>
-                  )}
-                </div>
-              </button>
-
-              {/* Actions row */}
-              {selectedRoomId === room.id && editingId !== room.id && (
-                <div className="flex items-center gap-1 px-3 pb-3 pt-1 border-t border-border/50">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => { e.stopPropagation(); handleStartEdit(room); }}
-                    className="h-8 px-2"
-                  >
-                    <Edit2 className="w-4 h-4 mr-1" />
-                    Renombrar
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => { e.stopPropagation(); handleDuplicate(room); }}
-                    className="h-8 px-2"
-                  >
-                    <Copy className="w-4 h-4 mr-1" />
-                    Duplicar
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => { e.stopPropagation(); handleDelete(room.id); }}
-                    className="h-8 px-2 text-destructive hover:text-destructive"
-                  >
-                    <Trash2 className="w-4 h-4 mr-1" />
-                    Eliminar
-                  </Button>
-                </div>
-              )}
+          {/* Favorites Section */}
+          {modeFavorites.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-1">
+                <Star className="w-3 h-3" /> Favoritos
+              </h4>
+              {modeFavorites.map(room => (
+                <RoomItem key={room.id} room={room} />
+              ))}
             </div>
-          ))}
+          )}
+
+          {/* History Section */}
+          {modeHistory.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-1 mt-2">
+                <Clock className="w-3 h-3" /> Recientes
+              </h4>
+              {modeHistory.map(room => (
+                <RoomItem key={room.id} room={room} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* Selected room summary (when collapsed) */}
       {!expanded && selectedRoom && (
-        <div className="p-3 border-2 border-foreground bg-foreground/5">
+        <div className="p-3 border-2 border-foreground bg-foreground/5 relative">
           <p className="font-bold">{selectedRoom.name}</p>
           <p className="text-sm text-muted-foreground">{selectedRoom.players.length} jugadores guardados</p>
+          {selectedRoom.isFavorite && <Star className="w-4 h-4 text-yellow-500 absolute top-3 right-3 fill-yellow-500" />}
         </div>
       )}
     </div>

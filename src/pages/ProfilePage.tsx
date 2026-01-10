@@ -11,7 +11,10 @@ import { PlayerAvatar } from '@/components/game/PlayerAvatar';
 import { getAvatarsByGender } from '@/lib/avatars';
 import { cn } from '@/lib/utils';
 import type { Gender } from '@/types/game';
-import { LogOut, Upload } from 'lucide-react';
+import { LogOut, Upload, Users, Star, Clock, Trash2 } from 'lucide-react';
+import { useSavedRooms } from '@/hooks/useSavedRooms';
+import { SavedRoomsManager } from '@/components/game/SavedRoomsManager';
+import type { SavedRoom } from '@/types/savedRoom';
 
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
@@ -116,7 +119,7 @@ export default function ProfilePage() {
             displayName={displayName}
             size="xl"
           />
-          
+
           <label className="cursor-pointer">
             <input
               type="file"
@@ -178,8 +181,8 @@ export default function ProfilePage() {
                   onClick={() => setAvatarKey(avatar.key)}
                   className={cn(
                     'p-3 text-3xl border-2 border-foreground transition-colors',
-                    avatarKey === avatar.key 
-                      ? 'bg-foreground text-background' 
+                    avatarKey === avatar.key
+                      ? 'bg-foreground text-background'
                       : 'bg-card hover:bg-secondary'
                   )}
                 >
@@ -188,6 +191,12 @@ export default function ProfilePage() {
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Favorites and History */}
+        <div className="space-y-6">
+          <h2 className="text-xl font-bold border-b-2 border-foreground pb-2">Mis Salas</h2>
+          <SavedRoomsManager />
         </div>
 
         {/* Actions */}

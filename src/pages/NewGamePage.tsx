@@ -17,7 +17,7 @@ import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, X, Users, Smartphone, AlertTriangle, Save, WifiOff } from "lucide-react";
+import { Plus, X, Users, AlertTriangle, Save } from "lucide-react";
 import type { GameMode, GuestPlayer } from "@/types/game";
 import type { SavedRoom } from "@/types/savedRoom";
 
@@ -33,24 +33,26 @@ export default function NewGamePage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [selectedPackIds, setSelectedPackIds] = useState<string[]>([]);
   const [variant, setVariant] = useState<'classic' | 'double_topo' | 'guess_player'>('classic');
+  const [cluesEnabled, setCluesEnabled] = useState(true);
   const [selectedSavedRoom, setSelectedSavedRoom] = useState<SavedRoom | null>(null);
+
+  // RESTORED: Manual save options
+  const [showSaveOption, setShowSaveOption] = useState(false);
   const [roomName, setRoomName] = useState('');
-  const [showSaveOption, setShowSaveOption] = useState(true);
 
   const CREATION_TIMEOUT_MS = 10000; // 10 seconds
 
   const { user } = useAuth();
   const guestId = useGuestId();
   const { createSession } = useGameSession();
-  const { createRoom, updateRoom, getRoomById } = useSavedRooms();
   const { isOnline } = useOnlineStatus();
+  const { createRoom, updateRoom, getRoomById, recordHistory } = useSavedRooms();
   const navigate = useNavigate();
 
   const minPlayers = 3;
   const maxPlayers = 20;
   const maxToposHard = 5;
 
-  // En multi no sabemos jugadores aún; estimamos 6 para el warning/limit visual
   const playerCount = mode === "single" ? players.length : 6;
   const effectiveMaxTopos = Math.min(maxToposHard, Math.max(1, Math.floor(playerCount / 2)));
 
@@ -58,16 +60,13 @@ export default function NewGamePage() {
     if (topoCount > effectiveMaxTopos) setTopoCount(effectiveMaxTopos);
   }, [effectiveMaxTopos, topoCount]);
 
-  // Doble topo siempre requiere 2 topos
   useEffect(() => {
     if (variant === 'double_topo') setTopoCount(2);
   }, [variant]);
 
-  // Load players and preferences from selected saved room
   useEffect(() => {
     if (selectedSavedRoom) {
       setPlayers(selectedSavedRoom.players);
-      setRoomName(selectedSavedRoom.name);
       // Restore game preferences
       if (selectedSavedRoom.topoCount !== undefined) {
         setTopoCount(selectedSavedRoom.topoCount);
@@ -77,6 +76,18 @@ export default function NewGamePage() {
       }
       if (selectedSavedRoom.selectedPackIds?.length) {
         setSelectedPackIds(selectedSavedRoom.selectedPackIds);
+      }
+      if (selectedSavedRoom.cluesEnabled !== undefined) {
+        setCluesEnabled(selectedSavedRoom.cluesEnabled);
+      }
+
+      // Setup manual save state if room is favorite
+      if (selectedSavedRoom.isFavorite) {
+        setRoomName(selectedSavedRoom.name);
+        setShowSaveOption(true);
+      } else {
+        setRoomName('');
+        setShowSaveOption(false);
       }
     }
   }, [selectedSavedRoom]);
@@ -109,6 +120,7 @@ export default function NewGamePage() {
     if (!room) {
       setPlayers([]);
       setRoomName('');
+      setShowSaveOption(false);
     }
   };
 
@@ -140,7 +152,6 @@ export default function NewGamePage() {
     setCreateError(null);
     console.info('[NewGame] create begin', { mode, topoCount, playerCount: players.length });
 
-    // Timeout mechanism: abort if operation takes too long
     let timeoutTriggered = false;
     const timeoutId = setTimeout(() => {
       timeoutTriggered = true;
@@ -153,9 +164,8 @@ export default function NewGamePage() {
     try {
       const previousCardId = getPreviousCardId();
       console.info('[NewGame] calling createSession', { previousCardId });
-      const session = await createSession(mode, topoCount, user?.id, !user ? guestId : undefined, selectedPackIds, previousCardId);
+      const session = await createSession(mode, topoCount, user?.id, !user ? guestId : undefined, selectedPackIds, previousCardId, cluesEnabled);
 
-      // If timeout already triggered, abort
       if (timeoutTriggered) {
         console.warn('[NewGame] Timeout already triggered, aborting');
         return;
@@ -167,33 +177,30 @@ export default function NewGamePage() {
         toast.error("Error al crear la partida");
         return;
       }
-      console.info('[NewGame] session created', { sessionId: session.id });
 
-      // Store variant in localStorage
-      localStorage.setItem(`impostor:variant:${session.id}`, variant);
+      // Record history OR Explicit Save
+      if (mode === 'single' && players.length >= minPlayers) {
+        console.info('[NewGame] Saving room/history');
 
-      // Save room if enabled and mode is single
-      if (mode === "single" && showSaveOption && players.length >= minPlayers) {
-        const finalRoomName = roomName.trim() || `Sala ${new Date().toLocaleDateString()}`;
-        if (selectedSavedRoom) {
-          // Update existing room with new players
-          updateRoom(selectedSavedRoom.id, {
-            players,
-            name: finalRoomName
-          });
-        } else {
-          // Create new saved room
-          createRoom(finalRoomName, mode, players);
-        }
-        toast.success('Sala guardada');
+        const finalRoomName = (showSaveOption && roomName.trim()) ? roomName.trim() : undefined;
+
+        await recordHistory(players, mode, {
+          topoCount,
+          variant,
+          selectedPackIds,
+          forceName: finalRoomName,
+          forceFavorite: showSaveOption ? true : undefined // Only force true if checked, otherwise leave as is/false
+        });
+
+        if (showSaveOption) toast.success('Sala guardada en favoritos');
       }
 
+      localStorage.setItem(`impostor:variant:${session.id}`, variant);
+
       if (mode === "single") {
-        // Check if offline session (id starts with "offline-")
         const isOfflineSession = session.id.startsWith('offline-');
 
         if (isOfflineSession) {
-          // Offline mode: Store players in localStorage instead of database
           console.info('[NewGame] OFFLINE: Storing players locally');
           const offlinePlayers = players.map((player, i) => ({
             id: `offline-player-${i}`,
@@ -210,11 +217,8 @@ export default function NewGamePage() {
           }));
           localStorage.setItem(`impostor:offline_players:${session.id}`, JSON.stringify(offlinePlayers));
         } else {
-          // Online mode: Insert players into database
           for (let i = 0; i < players.length; i++) {
             const player = players[i];
-            console.info('[Supabase] insert session_player', { index: i, displayName: player.displayName });
-
             const { error: insertError } = await supabase.from("session_players").insert({
               session_id: session.id,
               guest_id: player.id,
@@ -228,69 +232,16 @@ export default function NewGamePage() {
               console.error('[Supabase] insert session_player error', { index: i, error: insertError });
               throw new Error(`Error al añadir jugador ${player.displayName}`);
             }
-            console.info('[Supabase] insert session_player ok', { index: i });
           }
         }
 
-        console.info('[Router] navigating to game', { sessionId: session.id });
         navigate(`/game/${session.id}`);
       } else {
-        // Multiplayer: Add host as first player
-        let hostPlayerData: {
-          session_id: string;
-          user_id: string | null;
-          guest_id: string | null;
-          display_name: string;
-          gender: string;
-          avatar_key: string;
-          photo_url: string | null;
-          turn_order: number;
-        } = {
-          session_id: session.id,
-          user_id: user?.id || null,
-          guest_id: !user ? guestId : null,
-          display_name: 'Anfitrión',
-          gender: 'other',
-          avatar_key: 'default',
-          photo_url: null,
-          turn_order: 0,
-        };
-
-        // Try to fetch profile for authenticated users
-        if (user?.id) {
-          console.info('[Supabase] fetching profile for host');
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('display_name, gender, avatar_key, photo_url')
-            .eq('id', user.id)
-            .single();
-
-          if (profile) {
-            hostPlayerData = {
-              ...hostPlayerData,
-              display_name: profile.display_name || 'Anfitrión',
-              gender: profile.gender || 'other',
-              avatar_key: profile.avatar_key || 'default',
-              photo_url: profile.photo_url || null,
-            };
-          }
-        }
-
-        console.info('[Supabase] insert host player');
-        const { error: hostInsertError } = await supabase.from('session_players').insert(hostPlayerData);
-
-        if (hostInsertError) {
-          console.error('[Supabase] insert host player error', hostInsertError);
-          throw new Error('Error al registrar al anfitrión en la sala');
-        }
-        console.info('[Supabase] insert host player ok');
-
-        console.info('[Router] navigating to lobby', { sessionId: session.id });
+        // Multiplayer (kept just in case logic needed later, though concealed in UI)
         navigate(`/lobby/${session.id}`);
       }
 
       toast.success("¡Partida creada!");
-      console.info('[NewGame] create end - SUCCESS');
 
     } catch (e: any) {
       console.error('[NewGame] create error', e);
@@ -303,7 +254,6 @@ export default function NewGamePage() {
       if (!timeoutTriggered) {
         setCreating(false);
       }
-      console.info('[NewGame] create end - finally');
     }
   };
 
@@ -330,17 +280,12 @@ export default function NewGamePage() {
       }
     >
       <div className="max-w-md mx-auto space-y-8">
-        {/* Offline indicator */}
         <div className="flex justify-center">
-          {/* Offline indicator - always visible */}
           <OfflineIndicator />
         </div>
 
-        {/* Mode is now always single (multiplayer removed) */}
-
         <PackSelector selectedPackIds={selectedPackIds} onSelectionChange={setSelectedPackIds} />
 
-        {/* Saved Rooms Selector - only for single mode */}
         {mode === "single" && (
           <SavedRoomSelector
             mode={mode}
@@ -383,7 +328,25 @@ export default function NewGamePage() {
           )}
         </div>
 
-        {/* Selector de variante */}
+        <div className="space-y-3">
+          <Label className="text-lg font-bold">Pistas</Label>
+          <div className="flex items-center gap-3 p-4 border-2 border-border bg-card">
+            <input
+              type="checkbox"
+              id="clues-toggle"
+              checked={cluesEnabled}
+              onChange={(e) => setCluesEnabled(e.target.checked)}
+              className="w-5 h-5 cursor-pointer"
+            />
+            <label htmlFor="clues-toggle" className="flex-1 font-bold cursor-pointer">
+              Activar pistas para el Topo
+            </label>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Si se desactiva, el Topo no verá ninguna pista sobre la palabra secreta.
+          </p>
+        </div>
+
         <div className="space-y-3">
           <Label className="text-lg font-bold">Variante de juego</Label>
           <div className="grid grid-cols-1 gap-2">
@@ -465,7 +428,7 @@ export default function NewGamePage() {
               </Button>
             )}
 
-            {/* Save room option */}
+            {/* RESTORED: Save room option */}
             {players.length >= minPlayers && (
               <div className="space-y-3 p-4 border-2 border-border bg-card">
                 <div className="flex items-center gap-3">
@@ -489,12 +452,15 @@ export default function NewGamePage() {
                     className="h-12"
                   />
                 )}
+                {!showSaveOption && (
+                  <p className="text-xs text-center text-muted-foreground pt-0">
+                    Se guardará automáticamente en el historial si no la marcas como favorita.
+                  </p>
+                )}
               </div>
             )}
           </div>
         )}
-
-        {/* Multiplayer mode was removed - single player only */}
       </div>
     </PageLayout >
   );

@@ -82,6 +82,14 @@ const Index = () => {
           {user ? (
             <>
               <Button
+                onClick={() => navigate('/rooms')}
+                variant="ghost"
+                className="w-full h-14 text-lg justify-start gap-3"
+              >
+                <FolderOpen className="w-6 h-6" />
+                Gestión de salas
+              </Button>
+              <Button
                 onClick={() => navigate('/profile')}
                 variant="ghost"
                 className="w-full h-14 text-lg justify-start gap-3"

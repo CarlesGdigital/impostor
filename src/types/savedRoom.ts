@@ -9,10 +9,13 @@ export interface SavedRoom {
   players: GuestPlayer[];
   createdAt: string;
   updatedAt: string;
+  isFavorite: boolean;
+  lastPlayedAt: string;
   // Game preferences (preserved for "play again")
   topoCount?: number;
   variant?: GameVariant;
   selectedPackIds?: string[];
+  cluesEnabled?: boolean;
 }
 
 export interface SavedRoomsState {

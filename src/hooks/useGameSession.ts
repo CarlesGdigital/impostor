@@ -44,6 +44,7 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
     deceivedTopoPlayerId: data.deceived_topo_player_id,
     deceivedWordText: data.deceived_word_text,
     deceivedClueText: data.deceived_clue_text,
+    cluesEnabled: data.clues_enabled,
     createdAt: data.created_at,
   });
 
@@ -320,13 +321,15 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
     hostUserId?: string,
     hostGuestId?: string,
     selectedPackIds?: string[],
-    excludeCardId?: string // Card ID to exclude from random selection (previous game's card)
+    excludeCardId?: string, // Card ID to exclude from random selection (previous game's card)
+    cluesEnabled: boolean = true
   ): Promise<GameSession | null> => {
     console.info('[createSession] Creating session', {
       mode,
       topoCount,
       packCount: selectedPackIds?.length || 0,
       excludeCardId: excludeCardId || 'none',
+      cluesEnabled,
       isOnline
     });
 
@@ -384,6 +387,7 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
           deceivedTopoPlayerId: null,
           deceivedWordText: null,
           deceivedClueText: null,
+          cluesEnabled: cluesEnabled,
           createdAt: new Date().toISOString(),
         };
 
@@ -555,6 +559,7 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
         card_id: randomCard.id,
         word_text: randomCard.word,
         clue_text: randomCard.clue,
+        clues_enabled: cluesEnabled,
       })
       .select()
       .single();

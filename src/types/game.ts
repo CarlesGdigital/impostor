@@ -35,6 +35,7 @@ export interface GameSession {
   deceivedTopoPlayerId?: string;
   deceivedWordText?: string;
   deceivedClueText?: string;
+  cluesEnabled?: boolean;
   createdAt: string;
 }
 
