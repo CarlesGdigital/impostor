@@ -314,16 +314,16 @@ const AdminWordsPage = () => {
         .from('packs')
         .select('id, name, master_category');
 
-      // Find valid pack IDs (only general, benicolet, picantes)
+      // Find valid pack IDs (only general, benicolet, picantes, terreta)
       const validPackIds = new Set(
         (allPacks || [])
-          .filter(p => p.master_category && ['general', 'benicolet', 'picantes'].includes(p.master_category))
+          .filter(p => p.master_category && ['general', 'benicolet', 'picantes', 'terreta'].includes(p.master_category))
           .map(p => p.id)
       );
 
       // Find invalid packs for reporting
       const invalidPacks = (allPacks || [])
-        .filter(p => !p.master_category || !['general', 'benicolet', 'picantes'].includes(p.master_category));
+        .filter(p => !p.master_category || !['general', 'benicolet', 'picantes', 'terreta'].includes(p.master_category));
 
       // Show what we found
       toast.info(`📊 Packs: ${validPackIds.size} válidos, ${invalidPacks.length} inválidos`);
@@ -422,7 +422,8 @@ const AdminWordsPage = () => {
       // Find or create the pack for this master category
       const packName = targetCategory === 'general' ? 'General'
         : targetCategory === 'benicolet' ? 'Benicolet'
-          : 'Picantes';
+          : targetCategory === 'terreta' ? 'De la terreta'
+            : 'Picantes';
       const packSlug = targetCategory;
 
       let { data: pack } = await supabase
@@ -508,7 +509,8 @@ const AdminWordsPage = () => {
       if (packError || !pack) {
         const categoryName = formMasterCategory === 'general' ? 'General'
           : formMasterCategory === 'benicolet' ? 'Benicolet'
-            : 'Picantes';
+            : formMasterCategory === 'terreta' ? 'De la terreta'
+              : 'Picantes';
         toast.error(`No existe la categoría "${categoryName}" en el sistema. Contacta con un administrador.`);
         setSaving(false);
         return;
@@ -824,6 +826,7 @@ const AdminWordsPage = () => {
                 <SelectContent>
                   <SelectItem value="general">🎯 General</SelectItem>
                   <SelectItem value="benicolet">🎭 Benicolet</SelectItem>
+                  <SelectItem value="terreta">🥘 De la terreta</SelectItem>
                   <SelectItem value="picantes">🔥 Picantes (+18)</SelectItem>
                 </SelectContent>
               </Select>
@@ -886,6 +889,7 @@ const AdminWordsPage = () => {
                     <SelectContent>
                       <SelectItem value="general">🎯 General</SelectItem>
                       <SelectItem value="benicolet">🎭 Benicolet</SelectItem>
+                      <SelectItem value="terreta">🥘 De la terreta</SelectItem>
                       <SelectItem value="picantes">🔥 Picantes (+18)</SelectItem>
                     </SelectContent>
                   </Select>
@@ -927,7 +931,7 @@ const AdminWordsPage = () => {
                 <div className="text-sm text-muted-foreground space-y-2">
                   <p><strong>Formato:</strong> categoria, palabra, pista</p>
                   <p className="text-xs">
-                    Categorías válidas: <code className="bg-muted px-1 rounded">general</code>, <code className="bg-muted px-1 rounded">benicolet</code>, <code className="bg-muted px-1 rounded">picantes</code>
+                    Categorías válidas: <code className="bg-muted px-1 rounded">general</code>, <code className="bg-muted px-1 rounded">benicolet</code>, <code className="bg-muted px-1 rounded">terreta</code>, <code className="bg-muted px-1 rounded">picantes</code>
                   </p>
                 </div>
                 <textarea

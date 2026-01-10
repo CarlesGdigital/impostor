@@ -362,6 +362,7 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
         const categoryDisplayNames: Record<string, string> = {
           'general': 'General',
           'benicolet': 'Benicolet',
+          'terreta': 'De la terreta',
           'picantes': 'Picantes'
         };
         const categoryText = offlineCard.master_category

@@ -88,6 +88,7 @@ export function BulkWordDialog({
     const getCategoryIcon = (cat: MasterCategory) => {
         switch (cat) {
             case 'benicolet': return <MapPin className="w-4 h-4" />;
+            case 'terreta': return <div className="text-sm">🥘</div>;
             case 'picantes': return <Flame className="w-4 h-4" />;
             default: return <Globe className="w-4 h-4" />;
         }
@@ -96,6 +97,7 @@ export function BulkWordDialog({
     const getCategoryLabel = (cat: MasterCategory) => {
         switch (cat) {
             case 'benicolet': return 'Benicolet';
+            case 'terreta': return 'Terreta';
             case 'picantes': return '🔥 Picantes (+18)';
             default: return 'General';
         }
@@ -152,6 +154,12 @@ export function BulkWordDialog({
                                     <span className="flex items-center gap-2">
                                         <MapPin className="w-4 h-4" />
                                         Benicolet
+                                    </span>
+                                </SelectItem>
+                                <SelectItem value="terreta">
+                                    <span className="flex items-center gap-2">
+                                        <div className="text-sm">🥘</div>
+                                        Terreta
                                     </span>
                                 </SelectItem>
                                 <SelectItem value="picantes">

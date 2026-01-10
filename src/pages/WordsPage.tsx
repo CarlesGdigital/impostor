@@ -36,6 +36,7 @@ const MASTER_CATEGORY_PACKS: Record<MasterCategory, { name: string; slug: string
   general: { name: 'General', slug: 'general' },
   benicolet: { name: 'Benicolet', slug: 'benicolet' },
   picantes: { name: 'Picantes', slug: 'picantes' },
+  terreta: { name: 'De la terreta', slug: 'terreta' },
 };
 
 // Rate limiting constants for guests
@@ -141,7 +142,7 @@ export default function WordsPage() {
   };
 
   const getMasterCategoryFromPack = (packMasterCategory: string | null | undefined): MasterCategory => {
-    if (packMasterCategory && ['general', 'benicolet', 'picantes'].includes(packMasterCategory)) {
+    if (packMasterCategory && ['general', 'benicolet', 'picantes', 'terreta'].includes(packMasterCategory)) {
       return packMasterCategory as MasterCategory;
     }
     return 'general';
@@ -225,6 +226,37 @@ export default function WordsPage() {
     return pack.id;
   };
 
+  const getCategoryBadge = (category: MasterCategory) => {
+    switch (category) {
+      case 'benicolet':
+        return (
+          <Badge variant="outline" className="gap-1">
+            <MapPin className="w-3 h-3" />
+            Benicolet
+          </Badge>
+        );
+      case 'terreta':
+        return (
+          <Badge variant="outline" className="gap-1 border-orange-500 text-orange-600 bg-orange-50">
+            🥘 Terreta
+          </Badge>
+        );
+      case 'picantes':
+        return (
+          <Badge variant="destructive" className="gap-1">
+            <Flame className="w-3 h-3" />
+            Picantes
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="secondary" className="gap-1">
+            <Globe className="w-3 h-3" />
+            General
+          </Badge>
+        );
+    }
+  };
   const handleSaveWord = async (data: {
     id?: string;
     masterCategory: MasterCategory;
@@ -575,31 +607,7 @@ export default function WordsPage() {
     });
   };
 
-  const getCategoryBadge = (category: MasterCategory) => {
-    switch (category) {
-      case 'benicolet':
-        return (
-          <Badge variant="outline" className="gap-1">
-            <MapPin className="w-3 h-3" />
-            Benicolet
-          </Badge>
-        );
-      case 'picantes':
-        return (
-          <Badge variant="destructive" className="gap-1">
-            <Flame className="w-3 h-3" />
-            Picantes
-          </Badge>
-        );
-      default:
-        return (
-          <Badge variant="secondary" className="gap-1">
-            <Globe className="w-3 h-3" />
-            General
-          </Badge>
-        );
-    }
-  };
+
 
   // Filter cards by search
   const filteredCards = cards.filter(card =>

@@ -23,7 +23,7 @@ interface PackSelectorProps {
 const STORAGE_KEY = 'topo_preferred_master_categories';
 const ADULT_CONFIRMED_KEY = 'topo_adult_content_confirmed';
 
-type MasterCategory = 'general' | 'benicolet' | 'picantes';
+type MasterCategory = 'general' | 'benicolet' | 'picantes' | 'terreta';
 
 export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelectorProps) {
   const [packs, setPacks] = useState<Pack[]>([]);
@@ -48,7 +48,7 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
         const storedCategories: MasterCategory[] = stored ? JSON.parse(stored) : ['general'];
         // Filter out picantes if not confirmed
         const validCategories = storedCategories.filter(
-          cat => ['general', 'benicolet', 'picantes'].includes(cat) && (cat !== 'picantes' || adultConfirmed)
+          cat => ['general', 'benicolet', 'picantes', 'terreta'].includes(cat) && (cat !== 'picantes' || adultConfirmed)
         );
         const categories = validCategories.length > 0 ? validCategories : ['general'];
         setSelectedMasters(categories as MasterCategory[]);
@@ -88,7 +88,7 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
   const getPackCategory = (pack: Pack): MasterCategory => {
     // 1. DB Column - only accept valid categories
     const explicitCat = pack.master_category;
-    if (explicitCat && ['general', 'benicolet', 'picantes'].includes(explicitCat)) {
+    if (explicitCat && ['general', 'benicolet', 'picantes', 'terreta'].includes(explicitCat)) {
       return explicitCat as MasterCategory;
     }
 
@@ -96,20 +96,22 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
     const s = (pack.slug || '').toLowerCase();
     const n = (pack.name || '').toLowerCase();
 
-    if (s.includes('picante') || n.includes('picante') || s.includes('adulto') || n.includes('adulto') || 
-        s.includes('spicy') || n.includes('+18')) return 'picantes';
+    if (s.includes('picante') || n.includes('picante') || s.includes('adulto') || n.includes('adulto') ||
+      s.includes('spicy') || n.includes('+18')) return 'picantes';
     if (s.includes('benicolet') || n.includes('benicolet')) return 'benicolet';
+    if (s.includes('terreta') || n.includes('terreta')) return 'terreta';
 
     // Everything else goes to general (including legacy 'ninos')
     return 'general';
   };
 
-  // Group packs - only 3 categories
+  // Group packs - only 4 categories
   const packsByCategory = useMemo(() => {
     const groups: Record<MasterCategory, Pack[]> = {
       general: [],
       benicolet: [],
-      picantes: []
+      picantes: [],
+      terreta: []
     };
 
     packs.forEach(p => {
@@ -152,7 +154,7 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
     setAdultConfirmed(true);
     localStorage.setItem(ADULT_CONFIRMED_KEY, 'true');
     setShowAdultWarning(false);
-    
+
     // Now add picantes to selection
     const newCategories = [...selectedMasters, 'picantes'] as MasterCategory[];
     setSelectedMasters(newCategories);
@@ -198,7 +200,7 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
             </AlertDialogTitle>
             <AlertDialogDescription className="text-left space-y-2">
               <p>
-                La sección <strong>"Picantes"</strong> contiene palabras con humor adulto, 
+                La sección <strong>"Picantes"</strong> contiene palabras con humor adulto,
                 doble sentido y contenido que puede no ser apropiado para menores.
               </p>
               <p className="font-medium">
@@ -208,7 +210,7 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={handleAdultConfirm}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -232,6 +234,13 @@ export function PackSelector({ selectedPackIds, onSelectionChange }: PackSelecto
           count={packsByCategory.benicolet.length}
           active={selectedMasters.includes('benicolet')}
           onClick={() => toggleMasterCategory('benicolet')}
+        />
+        <MasterTile
+          icon={<div className="text-xl">🥘</div>}
+          label="Terreta"
+          count={packsByCategory.terreta?.length || 0}
+          active={selectedMasters.includes('terreta')}
+          onClick={() => toggleMasterCategory('terreta')}
         />
         <MasterTile
           icon={<Flame className="w-6 h-6" />}
@@ -299,7 +308,7 @@ interface MasterTileProps {
 
 function MasterTile({ icon, label, count, active, onClick, variant = 'default', badge }: MasterTileProps) {
   const isSpicy = variant === 'spicy';
-  
+
   return (
     <button
       type="button"
@@ -307,7 +316,7 @@ function MasterTile({ icon, label, count, active, onClick, variant = 'default', 
       className={cn(
         "flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all relative overflow-hidden h-24",
         active
-          ? isSpicy 
+          ? isSpicy
             ? "border-destructive bg-destructive/10 shadow-md scale-[1.02]"
             : "border-primary bg-primary/5 shadow-md scale-[1.02]"
           : isSpicy
