@@ -226,15 +226,7 @@ export default function GamePage() {
       buttonDisabled = true;
     }
 
-    // Debug log
-    console.debug("[GamePage] pass phase:", {
-      canReveal,
-      canStartDealing,
-      isDealingInProgress,
-      role: currentPlayer?.role,
-      status: session?.status,
-      hasWord: !!session?.wordText,
-    });
+    // Removed debug log for production
 
     return (
       <PageLayout title={`Jugador ${currentIndex + 1}/${players.length}`} showBack={false}>
@@ -282,7 +274,6 @@ export default function GamePage() {
   }
 
   // Fase "reveal"
-  console.debug("[GamePage] reveal phase:", currentPlayer.role, isTopo, isDeceivedTopo);
 
   // Read targetPlayerId from localStorage (variant already declared above)
   const targetPlayerId = sessionId ? localStorage.getItem(`impostor:targetPlayerId:${sessionId}`) : null;

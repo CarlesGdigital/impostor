@@ -55,8 +55,9 @@ export function useSavedRooms() {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('saved_rooms')
+        .from('saved_rooms' as any)
         .select('*')
+        .eq('user_id', user.id)
         .order('last_played_at', { ascending: false });
 
       if (error) {
@@ -135,7 +136,7 @@ export function useSavedRooms() {
     if (user && !useLocalOnly) {
       try {
         const { data, error } = await supabase
-          .from('saved_rooms')
+          .from('saved_rooms' as any) // Added 'as any' cast
           .insert({
             id: newRoom.id,
             user_id: user.id,
@@ -194,7 +195,7 @@ export function useSavedRooms() {
 
 
         const { error } = await supabase
-          .from('saved_rooms')
+          .from('saved_rooms' as any) // Added 'as any' cast
           .update(dbUpdates)
           .eq('id', roomId);
 
@@ -275,7 +276,7 @@ export function useSavedRooms() {
     if (user && !useLocalOnly) {
       try {
         const { error } = await supabase
-          .from('saved_rooms')
+          .from('saved_rooms' as any)
           .delete()
           .eq('id', roomId);
 

@@ -580,6 +580,7 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
     const categoryDisplayNames: Record<string, string> = {
       'general': 'General',
       'benicolet': 'Benicolet',
+      'terreta': 'De la terreta',
       'picantes': 'Picantes'
     };
     const masterCategory = randomCard.packs?.master_category;
@@ -956,7 +957,19 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
   const resetGame = async () => {
     if (!session) return;
 
-    // Reset players
+    // Handle offline sessions
+    if (session.id.startsWith('offline-')) {
+      console.info('[resetGame] Clearing offline session:', session.id);
+      localStorage.removeItem(`impostor:offline_session:${session.id}`);
+      localStorage.removeItem(`impostor:offline_players:${session.id}`);
+      localStorage.removeItem(`impostor:variant:${session.id}`);
+      localStorage.removeItem(`impostor:targetPlayerId:${session.id}`);
+      setSession(null);
+      setPlayers([]);
+      return;
+    }
+
+    // Reset players (online)
     await supabase
       .from('session_players')
       .update({ role: null, has_revealed: false })
