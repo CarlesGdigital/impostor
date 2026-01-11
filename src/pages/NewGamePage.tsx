@@ -14,6 +14,7 @@ import { useGuestId } from "@/hooks/useGuestId";
 import { useGameSession } from "@/hooks/useGameSession";
 import { useSavedRooms } from "@/hooks/useSavedRooms";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { useOfflineCards } from "@/hooks/useOfflineCards";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -47,6 +48,7 @@ export default function NewGamePage() {
   const { createSession } = useGameSession();
   const { isOnline } = useOnlineStatus();
   const { createRoom, updateRoom, getRoomById, recordHistory } = useSavedRooms();
+  const { hasOfflineData, isLoading: isSyncing, syncCards } = useOfflineCards();
   const navigate = useNavigate();
 
   const minPlayers = 3;
@@ -62,6 +64,14 @@ export default function NewGamePage() {
 
   // Misterioso mode doesn't affect topo count
   // Caos mode will randomize at game start, keep UI selection visible
+
+  // Ensure offline data is synced before allowing game creation
+  useEffect(() => {
+    if (!hasOfflineData() && !isSyncing && isOnline) {
+      console.info('[NewGame] No offline data, triggering sync...');
+      syncCards();
+    }
+  }, [hasOfflineData, isSyncing, isOnline, syncCards]);
 
   useEffect(() => {
     if (selectedSavedRoom) {
@@ -256,7 +266,8 @@ export default function NewGamePage() {
     }
   };
 
-  const canCreate = (mode === "multi" || players.length >= minPlayers) && selectedPackIds.length > 0;
+  const dataReady = hasOfflineData() || !isOnline; // Offline mode is always "ready"
+  const canCreate = players.length >= minPlayers && selectedPackIds.length > 0 && dataReady && !isSyncing;
   const topoWarning = mode === "single" && players.length > 0 && topoCount > Math.floor(players.length / 2);
 
   return (
@@ -265,7 +276,7 @@ export default function NewGamePage() {
       footer={
         <div className="space-y-3">
           <Button onClick={handleCreateGame} disabled={!canCreate || creating} className="w-full h-16 text-xl font-bold">
-            {creating ? "Creando..." : mode === "multi" ? "Crear sala" : "Crear partida"}
+            {creating ? "Creando..." : isSyncing ? "Sincronizando..." : "Crear partida"}
           </Button>
           {createError && (
             <div className="p-4 border-2 border-destructive bg-destructive/10 text-center space-y-2">
