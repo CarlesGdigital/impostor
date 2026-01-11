@@ -20,14 +20,15 @@ Un juego de fiesta multijugador para descubrir al impostor. Perfecto para reunio
 ## ✨ Características
 
 - 📱 **PWA (Progressive Web App)** - Instalable en móviles como app nativa
-- 🔌 **Modo Offline-First** - Juega sin conexión a internet
+- 🔌 **Modo Offline-First** - Juega sin conexión a internet (sincronización automática)
 - 🎲 **Variantes de juego**:
-  - Clásico (1 o más topos)
-  - Doble topo (uno engañado)
-  - Adivina al jugador
-- 🏷️ **Categorías**: General, Benicolet, Picantes
+  - **Clásico** - El juego tradicional (1 o más topos)
+  - **🎭 Misterioso** - Los topos NO saben que lo son (ven otra palabra)
+  - **🌀 Caos** - Número aleatorio de topos (de 1 a todos)
+- 🏷️ **Categorías**: General, Benicolet, De la Terreta, Picantes
 - 👤 **Juego local** - Pasa el móvil entre jugadores
 - 🔄 **Sincronización automática** de palabras para modo offline
+- ⚙️ **Preferencias guardadas** - Al volver a jugar se restauran las opciones
 - 🎨 **Interfaz moderna** con modo oscuro
 
 ## 🛠️ Stack Tecnológico
