@@ -14,7 +14,7 @@ interface PlayAgainButtonProps {
   previousCardId?: string; // Card ID from the finished game to exclude
   // Game preferences to preserve
   topoCount?: number;
-  variant?: string;
+  variant?: GameVariant;
   selectedPackIds?: string[];
   cluesEnabled?: boolean;
 }

@@ -6,6 +6,7 @@ import { CardReveal } from "@/components/game/CardReveal";
 import { PlayerAvatar } from "@/components/game/PlayerAvatar";
 import { PlayAgainButton } from "@/components/game/PlayAgainButton";
 import { useGameSession } from "@/hooks/useGameSession";
+import type { GameVariant } from "@/types/savedRoom";
 
 export default function GamePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -134,7 +135,7 @@ export default function GamePage() {
               mode="single"
               previousCardId={session.cardId}
               topoCount={session.topoCount}
-              variant={variant}
+              variant={variant as GameVariant}
               selectedPackIds={session.selectedPackIds || []}
               cluesEnabled={session.cluesEnabled}
             />
@@ -289,9 +290,6 @@ export default function GamePage() {
   }
 
   // Fase "reveal"
-
-  // Read targetPlayerId from localStorage (variant already declared above)
-  const targetPlayerId = sessionId ? localStorage.getItem(`impostor:targetPlayerId:${sessionId}`) : null;
 
   // Calculate display values based on variant and role
   let displayAsTopo = isTopo;
