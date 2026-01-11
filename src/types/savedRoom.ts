@@ -1,6 +1,6 @@
 import type { GameMode, GuestPlayer } from './game';
 
-export type GameVariant = 'classic' | 'double_topo' | 'guess_player';
+export type GameVariant = 'classic' | 'misterioso' | 'caos';
 
 export interface SavedRoom {
   id: string;

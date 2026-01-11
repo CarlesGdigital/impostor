@@ -32,7 +32,7 @@ export default function NewGamePage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [selectedPackIds, setSelectedPackIds] = useState<string[]>([]);
-  const [variant, setVariant] = useState<'classic' | 'double_topo' | 'guess_player'>('classic');
+  const [variant, setVariant] = useState<'classic' | 'misterioso' | 'caos'>('classic');
   const [cluesEnabled, setCluesEnabled] = useState(true);
   const [selectedSavedRoom, setSelectedSavedRoom] = useState<SavedRoom | null>(null);
 
@@ -60,9 +60,8 @@ export default function NewGamePage() {
     if (topoCount > effectiveMaxTopos) setTopoCount(effectiveMaxTopos);
   }, [effectiveMaxTopos, topoCount]);
 
-  useEffect(() => {
-    if (variant === 'double_topo') setTopoCount(2);
-  }, [variant]);
+  // Misterioso mode doesn't affect topo count
+  // Caos mode will randomize at game start, keep UI selection visible
 
   useEffect(() => {
     if (selectedSavedRoom) {
@@ -299,7 +298,7 @@ export default function NewGamePage() {
           <div className="flex items-center gap-4">
             <button
               onClick={() => setTopoCount(Math.max(1, topoCount - 1))}
-              disabled={topoCount <= 1 || variant === 'double_topo'}
+              disabled={topoCount <= 1 || variant === 'caos'}
               className="w-14 h-14 border-2 border-foreground text-2xl font-bold disabled:opacity-30"
             >
               -
@@ -309,7 +308,7 @@ export default function NewGamePage() {
 
             <button
               onClick={() => setTopoCount(Math.min(effectiveMaxTopos, topoCount + 1))}
-              disabled={topoCount >= effectiveMaxTopos || variant === 'double_topo'}
+              disabled={topoCount >= effectiveMaxTopos || variant === 'caos'}
               className="w-14 h-14 border-2 border-foreground text-2xl font-bold disabled:opacity-30"
             >
               +
@@ -361,24 +360,24 @@ export default function NewGamePage() {
               <span className="text-sm opacity-70">El juego tradicional de palabras</span>
             </button>
             <button
-              onClick={() => setVariant('double_topo')}
+              onClick={() => setVariant('misterioso')}
               className={cn(
                 "flex flex-col p-4 border-2 border-foreground text-left transition-colors",
-                variant === 'double_topo' ? "bg-foreground text-background" : "bg-card hover:bg-secondary",
+                variant === 'misterioso' ? "bg-foreground text-background" : "bg-card hover:bg-secondary",
               )}
             >
-              <span className="font-bold">Doble topo (uno confundido)</span>
-              <span className="text-sm opacity-70">2 topos, pero uno cree ser tripulación</span>
+              <span className="font-bold">🎭 Misterioso</span>
+              <span className="text-sm opacity-70">Los topos no saben que lo son (ven otra palabra)</span>
             </button>
             <button
-              onClick={() => setVariant('guess_player')}
+              onClick={() => setVariant('caos')}
               className={cn(
                 "flex flex-col p-4 border-2 border-foreground text-left transition-colors",
-                variant === 'guess_player' ? "bg-foreground text-background" : "bg-card hover:bg-secondary",
+                variant === 'caos' ? "bg-foreground text-background" : "bg-card hover:bg-secondary",
               )}
             >
-              <span className="font-bold">Adivina al jugador</span>
-              <span className="text-sm opacity-70">La palabra es el nombre de un jugador</span>
+              <span className="font-bold">🌀 Caos</span>
+              <span className="text-sm opacity-70">Número de topos aleatorio (1 a todos)</span>
             </button>
           </div>
         </div>

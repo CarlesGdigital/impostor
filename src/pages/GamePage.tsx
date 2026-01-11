@@ -302,23 +302,11 @@ export default function GamePage() {
   let extraNote: string | null = null;
 
   if (isDeceivedTopo) {
-    // Deceived topo: show as CREW with alternative word (they don't know they're topo)
+    // Misterioso mode: deceived topo sees alternative word (they don't know they're topo)
     displayAsTopo = false;
     displayWord = session.deceivedWordText ?? session.wordText ?? "";
-    displayClue = ""; // Crew doesn't see clue, just word
-    console.info('[GamePage] Showing deceived topo as crew with alt word:', displayWord);
-  } else if (variant === 'guess_player') {
-    if (isTopo) {
-      // Topo doesn't see the word
-      displayWord = "";
-      displayClue = "No tienes palabra. Debes adivinar de quién hablan.";
-      displayAsTopo = true;
-    } else {
-      // Non-topo sees the target name
-      if (currentPlayer.id === targetPlayerId) {
-        extraNote = "¡Eres el objetivo! No lo hagas obvio.";
-      }
-    }
+    displayClue = ""; // They see word like crew
+    console.info('[GamePage] Showing deceived topo (misterioso) with alt word:', displayWord);
   }
 
   return (

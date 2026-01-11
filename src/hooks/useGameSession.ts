@@ -665,24 +665,22 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
 
       // Determine topo count based on variant
       let effectiveTopoCount = session.topoCount;
-      let deceivedTopoId: string | null = null;
       let deceivedWordText: string | null = null;
       let deceivedClueText: string | null = null;
+      let allToposDeceived = false; // For misterioso mode
 
-      if (variant === 'double_topo') {
-        // Double topo: 1 real topo + 1 deceived topo
-        effectiveTopoCount = 1; // Only 1 real topo who knows
-        const realTopoId = shuffledForRoles[0];
-        // Pick deceived topo from remaining players (not the real topo)
-        const remainingForDeceived = shuffledForRoles.slice(1);
-        deceivedTopoId = remainingForDeceived[Math.floor(Math.random() * remainingForDeceived.length)];
+      if (variant === 'caos') {
+        // CAOS: Random topo count from 1 to all players
+        effectiveTopoCount = Math.floor(Math.random() * players.length) + 1;
+        console.info('[startDealing] CAOS mode - random topo count:', effectiveTopoCount);
+      } else if (variant === 'misterioso') {
+        // MISTERIOSO: All topos don't know they are topos (get different word)
+        allToposDeceived = true;
+        console.info('[startDealing] MISTERIOSO mode - all topos will be deceived');
 
-        console.info('[startDealing] Double topo mode:', { realTopoId, deceivedTopoId });
-
-        // Get alternative word for deceived topo from same packs
+        // Get alternative word for deceived topos
         const packIds = session.selectedPackIds || [];
         if (packIds.length > 0) {
-          // Shuffle packs and try to find a different card
           const shuffledPacks = shuffleArray(packIds);
 
           for (const packChunk of [shuffledPacks.slice(0, 50)]) {
@@ -691,7 +689,7 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
               .select('id', { count: 'exact', head: true })
               .in('pack_id', packChunk)
               .neq('is_active', false)
-              .neq('id', session.cardId || ''); // Exclude real word
+              .neq('id', session.cardId || '');
 
             if (count && count > 0) {
               const randomOffset = Math.floor(Math.random() * count);
@@ -707,21 +705,18 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
               if (altCard) {
                 deceivedWordText = altCard.word;
                 deceivedClueText = altCard.clue;
-                console.info('[startDealing] Alternative word for deceived:', deceivedWordText);
+                console.info('[startDealing] Alternative word for misterioso:', deceivedWordText);
                 break;
               }
             }
           }
 
-          // Fallback: if no alt word found, use a placeholder
           if (!deceivedWordText) {
             deceivedWordText = 'Objeto misterioso';
             deceivedClueText = 'Algo que no es lo que parece';
             console.warn('[startDealing] No alt word found, using fallback');
           }
         }
-      } else {
-        effectiveTopoCount = session.topoCount;
       }
 
       const topoIds = shuffledForRoles.slice(0, effectiveTopoCount);
@@ -736,10 +731,9 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
         const player = players.find(p => p.id === playerId)!;
 
         let role: string;
-        if (variant === 'double_topo' && playerId === deceivedTopoId) {
-          role = 'deceived_topo';
-        } else if (topoIds.includes(playerId)) {
-          role = 'topo';
+        if (topoIds.includes(playerId)) {
+          // In misterioso mode, ALL topos are deceived (they don't know they're topos)
+          role = allToposDeceived ? 'deceived_topo' : 'topo';
         } else {
           role = 'crew';
         }
@@ -780,21 +774,7 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
       const randomFirstSpeaker = shuffleArray(playerIds)[0];
       console.info('[startDealing] Random first speaker:', randomFirstSpeaker);
 
-      // For guess_player: pick target and update word
-      let wordTextOverride = null;
-      let clueTextOverride = null;
       const currentPlayers = isOfflineSession ? updatedPlayersLocal : players;
-
-      if (variant === 'guess_player' && currentPlayers.length > 0) {
-        const nonTopoPlayers = currentPlayers.filter(p => p.role !== 'topo');
-        if (nonTopoPlayers.length > 0) {
-          const targetPlayer = nonTopoPlayers[Math.floor(Math.random() * nonTopoPlayers.length)];
-          localStorage.setItem(`impostor:targetPlayerId:${session.id}`, targetPlayer.id);
-          wordTextOverride = targetPlayer.displayName;
-          clueTextOverride = "Describe a esta persona sin decir su nombre.";
-          console.info('[startDealing] Target player for guess_player:', targetPlayer.displayName);
-        }
-      }
 
       // Update session status to 'dealing' with all persisted data
       const updateData: any = {
@@ -802,14 +782,8 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
         first_speaker_player_id: randomFirstSpeaker,
       };
 
-      if (wordTextOverride) {
-        updateData.word_text = wordTextOverride;
-        updateData.clue_text = clueTextOverride;
-      }
-
-      // Persist double_topo data in database for stability on reload
-      if (variant === 'double_topo' && deceivedTopoId) {
-        updateData.deceived_topo_player_id = deceivedTopoId;
+      // Persist misterioso data for stability on reload (all topos see this word)
+      if (variant === 'misterioso' && deceivedWordText) {
         updateData.deceived_word_text = deceivedWordText;
         updateData.deceived_clue_text = deceivedClueText;
       }
