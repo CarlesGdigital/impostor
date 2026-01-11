@@ -16,6 +16,7 @@ interface PlayAgainButtonProps {
   topoCount?: number;
   variant?: string;
   selectedPackIds?: string[];
+  cluesEnabled?: boolean;
 }
 
 export function PlayAgainButton({
@@ -27,6 +28,7 @@ export function PlayAgainButton({
   topoCount,
   variant,
   selectedPackIds,
+  cluesEnabled,
 }: PlayAgainButtonProps) {
   const navigate = useNavigate();
   const { createRoom, updateRoom, getRoomsByMode } = useSavedRooms();
@@ -45,6 +47,7 @@ export function PlayAgainButton({
       topoCount,
       variant,
       selectedPackIds,
+      cluesEnabled,
     };
 
     // Check if a room with these exact players already exists
@@ -73,6 +76,7 @@ export function PlayAgainButton({
         topoCount,
         variant: variant as GameVariant,
         selectedPackIds,
+        cluesEnabled,
       });
       localStorage.setItem('impostor:play_again_room_id', existingRoom.id);
     }

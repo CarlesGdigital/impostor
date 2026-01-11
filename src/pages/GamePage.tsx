@@ -136,6 +136,7 @@ export default function GamePage() {
               topoCount={session.topoCount}
               variant={variant}
               selectedPackIds={session.selectedPackIds || []}
+              cluesEnabled={session.cluesEnabled}
             />
             <Button onClick={() => navigate("/")} variant="outline" className="w-full h-14 text-lg font-bold border-2">
               Volver al inicio
