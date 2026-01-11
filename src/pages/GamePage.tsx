@@ -228,12 +228,26 @@ export default function GamePage() {
 
     // Removed debug log for production
 
+    // Before dealing starts (no roles assigned yet), show a generic message
+    // Once dealing starts and roles are assigned, show the actual current player
+    const showPlayerName = canReveal || currentPlayer?.role;
+
     return (
-      <PageLayout title={`Jugador ${currentIndex + 1}/${players.length}`} showBack={false}>
+      <PageLayout title={showPlayerName ? `Jugador ${currentIndex + 1}/${players.length}` : "Preparando partida"} showBack={false}>
         <div className="max-w-md mx-auto flex flex-col items-center justify-center min-h-[60vh] gap-8">
-          <PlayerAvatar avatarKey={currentPlayer.avatarKey} displayName={currentPlayer.displayName} size="xl" />
-          <h2 className="text-3xl font-bold text-center">Pase el móvil a</h2>
-          <p className="text-5xl font-bold">{currentPlayer.displayName}</p>
+          {showPlayerName ? (
+            <>
+              <PlayerAvatar avatarKey={currentPlayer.avatarKey} displayName={currentPlayer.displayName} size="xl" />
+              <h2 className="text-3xl font-bold text-center">Pase el móvil a</h2>
+              <p className="text-5xl font-bold">{currentPlayer.displayName}</p>
+            </>
+          ) : (
+            <>
+              <div className="text-6xl">🎮</div>
+              <h2 className="text-3xl font-bold text-center">Listo para jugar</h2>
+              <p className="text-lg text-muted-foreground">{players.length} jugadores</p>
+            </>
+          )}
 
           {!canReveal && (
             <div className="space-y-4 text-center">
@@ -281,8 +295,10 @@ export default function GamePage() {
   // Calculate display values based on variant and role
   let displayAsTopo = isTopo;
   let displayWord = session.wordText ?? "";
-  // Use category as fallback clue when no clue is available
-  let displayClue = session.clueText || session.categoryText || "";
+  // Use clue ONLY if cluesEnabled is true
+  let displayClue = session.cluesEnabled !== false
+    ? (session.clueText || session.categoryText || "")
+    : "";
   let extraNote: string | null = null;
 
   if (isDeceivedTopo) {

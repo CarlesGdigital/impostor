@@ -31,7 +31,7 @@ export function PlayAgainButton({
   const navigate = useNavigate();
   const { createRoom, updateRoom, getRoomsByMode } = useSavedRooms();
 
-  const handlePlayAgain = () => {
+  const handlePlayAgain = async () => {
     // Convert players to GuestPlayer format for saving
     const guestPlayers: GuestPlayer[] = players.map(p => ({
       id: p.guestId || p.id,
@@ -60,13 +60,15 @@ export function PlayAgainButton({
       // Create new saved room with auto-generated name and preferences
       const roomCount = existingRooms.length + 1;
       const newName = roomName || `Sala ${roomCount}`;
-      const newRoom = createRoom(newName, mode, guestPlayers, preferences);
+      const newRoom = await createRoom(newName, mode, guestPlayers, preferences);
 
       // Store active room ID for NewGamePage to pick up
-      localStorage.setItem('impostor:play_again_room_id', newRoom.id);
+      if (newRoom) {
+        localStorage.setItem('impostor:play_again_room_id', newRoom.id);
+      }
     } else {
       // Update existing room with latest preferences
-      updateRoom(existingRoom.id, {
+      await updateRoom(existingRoom.id, {
         players: guestPlayers,
         topoCount,
         variant: variant as GameVariant,
