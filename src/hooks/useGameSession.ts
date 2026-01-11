@@ -680,7 +680,20 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
 
         // Get alternative word for deceived topos
         const packIds = session.selectedPackIds || [];
-        if (packIds.length > 0) {
+
+        if (isOfflineSession) {
+          // OFFLINE: Use local cached cards
+          const altCard = getRandomOfflineCard(packIds, session.cardId);
+          if (altCard && altCard.word !== session.wordText) {
+            deceivedWordText = altCard.word;
+            deceivedClueText = altCard.clue || 'Objeto misterioso';
+            console.info('[startDealing] OFFLINE alt word for misterioso:', deceivedWordText);
+          } else {
+            deceivedWordText = 'Objeto misterioso';
+            deceivedClueText = 'Algo que no es lo que parece';
+            console.warn('[startDealing] OFFLINE using fallback word');
+          }
+        } else if (packIds.length > 0) {
           const shuffledPacks = shuffleArray(packIds);
 
           for (const packChunk of [shuffledPacks.slice(0, 50)]) {
@@ -705,17 +718,18 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
               if (altCard) {
                 deceivedWordText = altCard.word;
                 deceivedClueText = altCard.clue;
-                console.info('[startDealing] Alternative word for misterioso:', deceivedWordText);
+                console.info('[startDealing] ONLINE alt word for misterioso:', deceivedWordText);
                 break;
               }
             }
           }
+        }
 
-          if (!deceivedWordText) {
-            deceivedWordText = 'Objeto misterioso';
-            deceivedClueText = 'Algo que no es lo que parece';
-            console.warn('[startDealing] No alt word found, using fallback');
-          }
+        // Final fallback
+        if (!deceivedWordText) {
+          deceivedWordText = 'Objeto misterioso';
+          deceivedClueText = 'Algo que no es lo que parece';
+          console.warn('[startDealing] Using fallback alt word');
         }
       }
 
@@ -777,39 +791,60 @@ export function useGameSession({ sessionId }: UseGameSessionOptions = {}) {
       const currentPlayers = isOfflineSession ? updatedPlayersLocal : players;
 
       // Update session status to 'dealing' with all persisted data
-      const updateData: any = {
-        status: 'dealing',
-        first_speaker_player_id: randomFirstSpeaker,
-      };
-
-      // Persist misterioso data for stability on reload (all topos see this word)
-      if (variant === 'misterioso' && deceivedWordText) {
-        updateData.deceived_word_text = deceivedWordText;
-        updateData.deceived_clue_text = deceivedClueText;
-      }
-
-      const { data: updatedSessionData, error: updateError } = await supabase
-        .from('game_sessions')
-        .update(updateData)
-        .eq('id', session.id)
-        .select()
-        .single();
-
-      if (updateError) {
-        console.error('[startDealing] Error updating session status:', updateError);
-        setError('Error al iniciar el reparto');
-        return false;
-      }
-
-      if (updatedSessionData) {
-        setSession(mapSession(updatedSessionData));
+      if (isOfflineSession) {
+        // OFFLINE: Update local session state directly
+        const updatedOfflineSession = {
+          ...session,
+          status: 'dealing' as const,
+          firstSpeakerPlayerId: randomFirstSpeaker,
+          deceivedWordText: variant === 'misterioso' ? deceivedWordText : null,
+          deceivedClueText: variant === 'misterioso' ? deceivedClueText : null,
+        };
+        setSession(updatedOfflineSession);
+        localStorage.setItem(`impostor:offline_session:${session.id}`, JSON.stringify(updatedOfflineSession));
         setLocalFirstSpeakerId(randomFirstSpeaker);
-        console.info('[startDealing] end - SUCCESS', {
+        console.info('[startDealing] OFFLINE end - SUCCESS', {
           sessionId: session.id,
-          status: updatedSessionData.status,
           variant,
+          deceivedWordText,
           firstSpeaker: randomFirstSpeaker,
         });
+      } else {
+        // ONLINE: Update database
+        const updateData: any = {
+          status: 'dealing',
+          first_speaker_player_id: randomFirstSpeaker,
+        };
+
+        // Persist misterioso data for stability on reload (all topos see this word)
+        if (variant === 'misterioso' && deceivedWordText) {
+          updateData.deceived_word_text = deceivedWordText;
+          updateData.deceived_clue_text = deceivedClueText;
+        }
+
+        const { data: updatedSessionData, error: updateError } = await supabase
+          .from('game_sessions')
+          .update(updateData)
+          .eq('id', session.id)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error('[startDealing] Error updating session status:', updateError);
+          setError('Error al iniciar el reparto');
+          return false;
+        }
+
+        if (updatedSessionData) {
+          setSession(mapSession(updatedSessionData));
+          setLocalFirstSpeakerId(randomFirstSpeaker);
+          console.info('[startDealing] ONLINE end - SUCCESS', {
+            sessionId: session.id,
+            status: updatedSessionData.status,
+            variant,
+            firstSpeaker: randomFirstSpeaker,
+          });
+        }
       }
 
       setDealingRequested(false);
