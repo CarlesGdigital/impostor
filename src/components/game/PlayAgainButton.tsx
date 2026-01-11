@@ -60,7 +60,7 @@ export function PlayAgainButton({
       // Create new saved room with auto-generated name and preferences
       const roomCount = existingRooms.length + 1;
       const newName = roomName || `Sala ${roomCount}`;
-      const newRoom = createRoom(newName, mode, guestPlayers, undefined, preferences);
+      const newRoom = createRoom(newName, mode, guestPlayers, preferences);
 
       // Store active room ID for NewGamePage to pick up
       localStorage.setItem('impostor:play_again_room_id', newRoom.id);

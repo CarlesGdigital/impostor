@@ -12,7 +12,7 @@ interface Pack {
   id: string;
   name: string;
   slug: string;
-  master_category?: 'general' | 'benicolet' | 'picantes';
+  master_category?: 'general' | 'benicolet' | 'picantes' | 'terreta';
 }
 
 interface PackSelectorProps {
